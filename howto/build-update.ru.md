@@ -31,7 +31,7 @@ git checkout mqtt-uplink
 Только одна плата (быстрая проверка перед полной матрицей):
 
 ```sh
-./scripts/build-observer-meshcoretel.sh repeater-v1.19.0 --env Heltec_v3_repeater_observer_meshcoretel
+./scripts/build-observer-meshcoretel.sh repeater-v1.19.0 --env Heltec_v3_observer_meshcoretel
 ```
 
 ## Что проверить перед прошивкой парка

@@ -38,7 +38,7 @@ later builds are incremental.
 **One board:**
 
 ```sh
-pio run -e Heltec_v3_repeater_observer_meshcoretel
+pio run -e Heltec_v3_observer_meshcoretel
 ```
 
 **All supported boards** (recommended — uses the release script):
@@ -80,7 +80,7 @@ out/observer-meshcoretel/<version>/<env>/
 Plug the board in via USB and either let PlatformIO upload:
 
 ```sh
-pio run -e Heltec_v3_repeater_observer_meshcoretel -t upload --upload-port /dev/ttyUSB0
+pio run -e Heltec_v3_observer_meshcoretel -t upload --upload-port /dev/ttyUSB0
 ```
 
 (macOS ports look like `/dev/cu.usbmodem*`; on Windows `COMx`.)
@@ -90,7 +90,7 @@ board: `esp32`, `esp32s3`, `esp32c3`):
 
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_repeater_observer_meshcoretel/firmware-merged.bin
+    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
 ```
 
 `firmware-merged.bin` writes bootloader, partition table and app in one go —

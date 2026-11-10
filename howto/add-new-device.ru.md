@@ -20,7 +20,7 @@ STM32, RP2040) поддержать нельзя — для них исполь�
 существующего repeater-окружения платы:
 
 ```ini
-[env:<Board>_repeater_observer_meshcoretel]
+[env:<Board>_observer_meshcoretel]
 extends = env:<Board>_repeater
 build_flags = ${env:<Board>_repeater.build_flags} -D WITH_MQTT_UPLINK=1
 build_src_filter = ${env:<Board>_repeater.build_src_filter} +<helpers/mqtt/*.cpp>
@@ -34,7 +34,7 @@ build_src_filter = ${env:<Board>_repeater.build_src_filter} +<helpers/mqtt/*.cpp
 ### 2. Соберите
 
 ```sh
-pio run -e <Board>_repeater_observer_meshcoretel
+pio run -e <Board>_observer_meshcoretel
 ```
 
 Посмотрите напечатанные проценты **RAM** и **Flash**.
@@ -51,8 +51,8 @@ WiFi + MQTT добавляют к приложению ~170 КБ. Платы, у
 board_build.partitions = min_spiffs.csv
 ```
 
-Готовые примеры: `LilyGo_TBeam_1W_repeater_observer_meshcoretel` и
-`Generic_E22_sx1262_repeater_observer_meshcoretel` в
+Готовые примеры: `LilyGo_TBeam_1W_observer_meshcoretel` и
+`Generic_E22_sx1262_observer_meshcoretel` в
 `observer_meshcoretel.ini`. Учтите цену: плата теряет OTA-слот, а перевод
 ноды между раскладками разделов сбрасывает сохранённые настройки (см.
 [build-update.ru.md](build-update.ru.md)).
@@ -65,7 +65,7 @@ board_build.partitions = min_spiffs.csv
 ### 5. Проверьте
 
 ```sh
-./scripts/build-observer-meshcoretel.sh --env <Board>_repeater_observer_meshcoretel
+./scripts/build-observer-meshcoretel.sh --env <Board>_observer_meshcoretel
 ```
 
 Затем прошейте и настройте узел как обычно ([setup.ru.md](setup.ru.md)) —

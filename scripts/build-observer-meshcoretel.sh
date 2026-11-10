@@ -11,7 +11,7 @@
 # Examples:
 #   scripts/build-observer-meshcoretel.sh                          # latest upstream repeater-v* tag
 #   scripts/build-observer-meshcoretel.sh repeater-v1.18.0         # specific upstream release tag
-#   scripts/build-observer-meshcoretel.sh repeater-v1.18.0 --env Heltec_v3_repeater_observer_meshcoretel
+#   scripts/build-observer-meshcoretel.sh repeater-v1.18.0 --env Heltec_v3_observer_meshcoretel
 #
 # The mqtt-uplink branch is rebased onto the target release (our diff is one
 # additive module + small hooks, so this is almost always clean), every
@@ -28,23 +28,23 @@ UPSTREAM_URL="https://github.com/meshcore-dev/MeshCore.git"
 OUT_DIR="out/observer-meshcoretel"
 
 ALL_ENVS=(
-  Heltec_v2_repeater_observer_meshcoretel
-  Heltec_v3_repeater_observer_meshcoretel
-  heltec_v4_repeater_observer_meshcoretel
-  heltec_v4_tft_repeater_observer_meshcoretel
-  Heltec_Wireless_Paper_repeater_observer_meshcoretel
-  Heltec_E213_repeater_observer_meshcoretel
-  Heltec_E290_repeater_observer_meshcoretel
-  Heltec_T190_repeater_observer_meshcoretel
-  LilyGo_TDeck_repeater_observer_meshcoretel
-  LilyGo_TLora_V2_1_1_6_repeater_observer_meshcoretel
-  Tbeam_SX1262_repeater_observer_meshcoretel
-  LilyGo_TBeam_1W_repeater_observer_meshcoretel
-  LilyGo_T3S3_sx1262_repeater_observer_meshcoretel
-  Xiao_S3_repeater_observer_meshcoretel
-  Xiao_S3_WIO_repeater_observer_meshcoretel
-  Meshadventurer_sx1262_repeater_observer_meshcoretel
-  Generic_E22_sx1262_repeater_observer_meshcoretel
+  Heltec_v2_observer_meshcoretel
+  Heltec_v3_observer_meshcoretel
+  Heltec_v4_observer_meshcoretel
+  Heltec_v4_tft_observer_meshcoretel
+  Heltec_Wireless_Paper_observer_meshcoretel
+  Heltec_E213_observer_meshcoretel
+  Heltec_E290_observer_meshcoretel
+  Heltec_T190_observer_meshcoretel
+  LilyGo_TDeck_observer_meshcoretel
+  LilyGo_TLora_V2_1_1_6_observer_meshcoretel
+  Tbeam_SX1262_observer_meshcoretel
+  LilyGo_TBeam_1W_observer_meshcoretel
+  LilyGo_T3S3_sx1262_observer_meshcoretel
+  Xiao_S3_observer_meshcoretel
+  Xiao_S3_WIO_observer_meshcoretel
+  Meshadventurer_sx1262_observer_meshcoretel
+  Generic_E22_sx1262_observer_meshcoretel
 )
 
 TARGET=""

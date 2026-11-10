@@ -20,7 +20,7 @@ Append a block at the end of the root `observer_meshcoretel.ini`, deriving
 from the board's existing repeater environment:
 
 ```ini
-[env:<Board>_repeater_observer_meshcoretel]
+[env:<Board>_observer_meshcoretel]
 extends = env:<Board>_repeater
 build_flags = ${env:<Board>_repeater.build_flags} -D WITH_MQTT_UPLINK=1
 build_src_filter = ${env:<Board>_repeater.build_src_filter} +<helpers/mqtt/*.cpp>
@@ -33,7 +33,7 @@ into PlatformIO's config via `extra_configs` in the root `platformio.ini`.
 ### 2. Build it
 
 ```sh
-pio run -e <Board>_repeater_observer_meshcoretel
+pio run -e <Board>_observer_meshcoretel
 ```
 
 Check the reported **RAM** and **Flash** percentages.
@@ -50,8 +50,8 @@ overflow. Fix inside your env block:
 board_build.partitions = min_spiffs.csv
 ```
 
-Existing examples: `LilyGo_TBeam_1W_repeater_observer_meshcoretel` and
-`Generic_E22_sx1262_repeater_observer_meshcoretel` in
+Existing examples: `LilyGo_TBeam_1W_observer_meshcoretel` and
+`Generic_E22_sx1262_observer_meshcoretel` in
 `observer_meshcoretel.ini`. Note the trade-off: that board loses its OTA
 update slot, and converting a node between partition layouts resets its
 stored settings (see [build-update.md](build-update.md)).
@@ -64,7 +64,7 @@ so release builds include it.
 ### 5. Verify
 
 ```sh
-./scripts/build-observer-meshcoretel.sh --env <Board>_repeater_observer_meshcoretel
+./scripts/build-observer-meshcoretel.sh --env <Board>_observer_meshcoretel
 ```
 
 Then flash and set the node up as usual ([setup.md](setup.md)) — the real test

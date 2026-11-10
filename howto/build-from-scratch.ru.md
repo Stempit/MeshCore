@@ -38,7 +38,7 @@ git checkout mqtt-uplink
 **Одна плата:**
 
 ```sh
-pio run -e Heltec_v3_repeater_observer_meshcoretel
+pio run -e Heltec_v3_observer_meshcoretel
 ```
 
 **Все поддерживаемые платы** (рекомендуется — через релизный скрипт):
@@ -80,7 +80,7 @@ out/observer-meshcoretel/<версия>/<env>/
 Подключите плату по USB и загрузите через PlatformIO:
 
 ```sh
-pio run -e Heltec_v3_repeater_observer_meshcoretel -t upload --upload-port /dev/ttyUSB0
+pio run -e Heltec_v3_observer_meshcoretel -t upload --upload-port /dev/ttyUSB0
 ```
 
 (на macOS порты вида `/dev/cu.usbmodem*`; на Windows — `COMx`.)
@@ -90,7 +90,7 @@ pio run -e Heltec_v3_repeater_observer_meshcoretel -t upload --upload-port /dev/
 
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_repeater_observer_meshcoretel/firmware-merged.bin
+    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
 ```
 
 `firmware-merged.bin` записывает bootloader, таблицу разделов и приложение
