@@ -13,12 +13,14 @@
 
 // WiFi station + SNTP management for the MQTT uplink. Credentials and power
 // save mode live in MQTTPrefs (pointer set via setConfig, re-read live so
-// `set wifi.*` commands take effect). All methods are no-ops off ESP32.
+// `set wifi.*` commands take effect). The prefs struct is owned (and persisted)
+// by MQTTUplink; WifiLink only mutates it in memory on set commands. All
+// methods are no-ops off ESP32.
 class WifiLink : public NetworkStateProvider {
 public:
   WifiLink();
 
-  void setConfig(const MQTTPrefs* prefs) { _prefs = prefs; }
+  void setConfig(MQTTPrefs* prefs) { _prefs = prefs; }
   void loop(bool network_required);
   void reconnectWifi();
 
@@ -43,7 +45,7 @@ private:
   void updateTimeSync();
 #endif
 
-  const MQTTPrefs* _prefs;
+  MQTTPrefs* _prefs;  // owned + persisted by MQTTUplink; mutated in memory by set wifi.* commands
   bool _wifi_started;
   bool _sntp_started;
   bool _have_time_sync;

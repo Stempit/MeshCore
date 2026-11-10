@@ -56,9 +56,7 @@ public:
   bool isRawEnabled() const { return _prefs.raw_enabled != 0; }
   bool setStatusEnabled(bool enabled);
   bool isStatusEnabled() const { return _prefs.status_enabled != 0; }
-  bool setTxEnabled(bool enabled);
-  bool isTxEnabled() const { return _prefs.tx_mode != 0; }
-  bool setTxMode(uint8_t mode);  // 0 = off, 1 = on, 2 = own adverts only
+  bool setTxMode(uint8_t mode);  // 0 = off, 1 = on (all own TX), 2 = own adverts only
   uint8_t getTxMode() const { return _prefs.tx_mode; }
   // Drop all broker connections and rejoin them from scratch (CLI `mqtt recover`
   // pairs this with WifiLink::reconnectWifi()).
@@ -121,7 +119,6 @@ private:
 #endif
 
   FILESYSTEM* _fs;
-  mesh::RTCClock* _rtc;
   mesh::LocalIdentity* _identity;
   MQTTPrefs _prefs;
   bool _running;
@@ -183,7 +180,6 @@ private:
   int buildRawJson(char* buffer, size_t buffer_size, const mesh::Packet& packet, bool is_tx, int rssi, float snr) const;
   static void escapeJsonString(const char* input, char* output, size_t output_size);
   static void makeSafeToken(const char* input, char* output, size_t output_size);
-  static void bytesToHexUpper(const uint8_t* src, size_t len, char* dst, size_t dst_size);
   static void formatIsoTimestamp(time_t ts, char* dst, size_t dst_size);
 #endif
 };

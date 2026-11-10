@@ -76,11 +76,9 @@ bool WifiLink::setWifiPowerSave(const char* mode) {
     return false;
   }
 
-  // _prefs points into MQTTUplink's persisted MQTTPrefs; saving goes through
-  // the uplink so the struct stays the single source of truth on disk.
-  // Here we only mutate the in-memory copy; persistence is handled by the
-  // caller (MyMesh) via mqtt.savePrefs().
-  const_cast<MQTTPrefs*>(_prefs)->wifi_powersave = next_mode;
+  // Mutates the shared MQTTPrefs in memory; persistence is the caller's job
+  // (MQTTUplink::handleCliCommand calls savePrefs()).
+  _prefs->wifi_powersave = next_mode;
   if (_wifi_started) {
     WiFi.setSleep(toEspPowerSave(next_mode));
   }
@@ -107,7 +105,7 @@ bool WifiLink::setWifiSSID(const char* ssid) {
   if (ssid == nullptr || _prefs == nullptr) {
     return false;
   }
-  StrHelper::strncpy(const_cast<MQTTPrefs*>(_prefs)->wifi_ssid, ssid, sizeof(_prefs->wifi_ssid));
+  StrHelper::strncpy(_prefs->wifi_ssid, ssid, sizeof(_prefs->wifi_ssid));
   reconnectWifi();
   return true;
 #else
@@ -121,7 +119,7 @@ bool WifiLink::setWifiPassword(const char* pwd) {
   if (pwd == nullptr || _prefs == nullptr) {
     return false;
   }
-  StrHelper::strncpy(const_cast<MQTTPrefs*>(_prefs)->wifi_pwd, pwd, sizeof(_prefs->wifi_pwd));
+  StrHelper::strncpy(_prefs->wifi_pwd, pwd, sizeof(_prefs->wifi_pwd));
   reconnectWifi();
   return true;
 #else

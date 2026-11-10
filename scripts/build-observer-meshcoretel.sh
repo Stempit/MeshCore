@@ -49,17 +49,24 @@ ALL_ENVS=(
 
 TARGET=""
 ONLY_ENV=""
-for arg in "$@"; do
-  case "$arg" in
-    --env) shift_next=1 ;;
-    --env=*) ONLY_ENV="${arg#--env=}" ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env)
+      ONLY_ENV="$2"
+      shift 2
+      ;;
+    --env=*)
+      ONLY_ENV="${1#--env=}"
+      shift
+      ;;
     --list)
       echo "Environments:"
       for e in "${ALL_ENVS[@]}"; do echo "  $e"; done
       exit 0
       ;;
     *)
-      if [[ "${shift_next:-0}" == "1" ]]; then ONLY_ENV="$arg"; shift_next=0; else TARGET="$arg"; fi
+      TARGET="$1"
+      shift
       ;;
   esac
 done

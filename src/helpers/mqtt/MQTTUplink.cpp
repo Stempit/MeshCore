@@ -6,9 +6,7 @@
 
 #if defined(ESP_PLATFORM)
 
-#include <helpers/ESP32Board.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <esp_idf_version.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
@@ -97,8 +95,8 @@ const MQTTUplink::BrokerSpec MQTTUplink::kBrokerSpecs[3] = {
      kLetsmeshUsBit, false, nullptr, nullptr},
 };
 
-MQTTUplink::MQTTUplink(mesh::RTCClock& rtc, mesh::LocalIdentity& identity)
-    : _fs(nullptr), _rtc(&rtc), _identity(&identity), _running(false), _last_status_publish(0), _last_status{},
+MQTTUplink::MQTTUplink(mesh::RTCClock&, mesh::LocalIdentity& identity)
+    : _fs(nullptr), _identity(&identity), _running(false), _last_status_publish(0), _last_status{},
       _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _network(nullptr), _queue{}, _queue_len(0),
       _event_retry_at(0), _no_broker_since(0), _stat_rx(0), _stat_pub(0), _stat_drop(0), _brokers{} {
   memset(_device_id, 0, sizeof(_device_id));
@@ -189,18 +187,6 @@ void MQTTUplink::makeSafeToken(const char* input, char* output, size_t output_si
   output[oi] = 0;
 }
 
-void MQTTUplink::bytesToHexUpper(const uint8_t* src, size_t len, char* dst, size_t dst_size) {
-  if (dst_size == 0) {
-    return;
-  }
-  size_t di = 0;
-  for (size_t i = 0; i < len && di + 2 < dst_size; ++i) {
-    snprintf(&dst[di], dst_size - di, "%02X", src[i]);
-    di += 2;
-  }
-  dst[min(di, dst_size - 1)] = 0;
-}
-
 void MQTTUplink::formatIsoTimestamp(time_t ts, char* dst, size_t dst_size) {
   if (dst_size == 0) {
     return;
@@ -261,7 +247,7 @@ void MQTTUplink::escapeJsonString(const char* input, char* output, size_t output
 }
 
 void MQTTUplink::refreshIdentityStrings() {
-  bytesToHexUpper(_identity->pub_key, PUB_KEY_SIZE, _device_id, sizeof(_device_id));
+  mesh::Utils::toHex(_device_id, _identity->pub_key, PUB_KEY_SIZE);
   for (BrokerState& broker : _brokers) {
     refreshBrokerIdentity(broker);
   }
@@ -500,12 +486,12 @@ int MQTTUplink::buildPacketJson(char* buffer, size_t buffer_size, const mesh::Pa
   if (raw_hex == nullptr) {
     return -1;
   }
-  bytesToHexUpper(raw, raw_len, raw_hex, 520);
+  mesh::Utils::toHex(raw_hex, raw, raw_len);
 
   uint8_t packet_hash[MAX_HASH_SIZE];
   packet.calculatePacketHash(packet_hash);
   char hash_hex[(MAX_HASH_SIZE * 2) + 1];
-  bytesToHexUpper(packet_hash, MAX_HASH_SIZE, hash_hex, sizeof(hash_hex));
+  mesh::Utils::toHex(hash_hex, packet_hash, MAX_HASH_SIZE);
 
   time_t now = time(nullptr);
   char ts[32];
@@ -579,7 +565,7 @@ int MQTTUplink::buildRawJson(char* buffer, size_t buffer_size, const mesh::Packe
   if (raw_hex == nullptr) {
     return -1;
   }
-  bytesToHexUpper(raw, raw_len, raw_hex, 520);
+  mesh::Utils::toHex(raw_hex, raw, raw_len);
   char ts[32];
   formatIsoTimestamp(time(nullptr), ts, sizeof(ts));
   char origin[80];
@@ -1202,11 +1188,6 @@ bool MQTTUplink::setStatusEnabled(bool enabled) {
   return savePrefs();
 }
 
-bool MQTTUplink::setTxEnabled(bool enabled) {
-  _prefs.tx_mode = enabled ? 1 : 0;
-  return savePrefs();
-}
-
 bool MQTTUplink::setTxMode(uint8_t mode) {
   if (mode > 2) {
     return false;
@@ -1311,7 +1292,7 @@ const char* MQTTUplink::getAggregateBrokerState() const {
 #else
 
 MQTTUplink::MQTTUplink(mesh::RTCClock&, mesh::LocalIdentity&)
-    : _fs(nullptr), _rtc(nullptr), _identity(nullptr), _running(false), _last_status_publish(0), _last_status{},
+    : _fs(nullptr), _identity(nullptr), _running(false), _last_status_publish(0), _last_status{},
       _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _network(nullptr) {
   MQTTPrefsStore::setDefaults(_prefs);
 }
@@ -1328,7 +1309,6 @@ bool MQTTUplink::isEndpointEnabled(uint8_t) const { return false; }
 bool MQTTUplink::setPacketsEnabled(bool) { return false; }
 bool MQTTUplink::setRawEnabled(bool) { return false; }
 bool MQTTUplink::setStatusEnabled(bool) { return false; }
-bool MQTTUplink::setTxEnabled(bool) { return false; }
 bool MQTTUplink::setIata(const char*) { return false; }
 bool MQTTUplink::isActive() const { return false; }
 bool MQTTUplink::setTxMode(uint8_t) { return false; }
