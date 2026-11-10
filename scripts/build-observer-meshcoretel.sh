@@ -122,6 +122,11 @@ DEST="$OUT_DIR/$VERSION"
 mkdir -p "$DEST"
 
 # --- build ----------------------------------------------------------------------
+
+# Refresh the build stamp: __DATE__/__TIME__ live in ObserverMesh.cpp; touching
+# this one file makes every env recompile just that TU with the current time.
+touch examples/simple_repeater/ObserverMesh.cpp
+
 ENVS=("${ALL_ENVS[@]}")
 if [[ -n "$ONLY_ENV" ]]; then
   ENVS=("$ONLY_ENV")
