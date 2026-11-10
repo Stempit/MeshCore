@@ -35,6 +35,10 @@
 #include <helpers/TxtDataHelpers.h>
 #include <helpers/RegionMap.h>
 #include <helpers/RoutingPolicy.h>
+#if defined(WITH_MQTT_UPLINK)
+  #include <helpers/mqtt/MQTTUplink.h>
+  #include <helpers/mqtt/WifiLink.h>
+#endif
 #include "RateLimiter.h"
 
 #ifdef WITH_BRIDGE
@@ -114,6 +118,10 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   RS232Bridge bridge;
 #elif defined(WITH_ESPNOW_BRIDGE)
   ESPNowBridge bridge;
+#endif
+#if defined(WITH_MQTT_UPLINK)
+  WifiLink wifi_link;
+  MQTTUplink mqtt;
 #endif
 
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);

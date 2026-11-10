@@ -482,6 +482,10 @@ void MyMesh::logRx(mesh::Packet *pkt, int len, float score) {
     bridge.sendPacket(pkt);
   }
 #endif
+#ifdef WITH_MQTT_UPLINK
+  mqtt.publishPacket(*pkt, false, (int)_radio->getLastRSSI(), _radio->getLastSNR(), (int)(score * 1000),
+                     (int)_radio->getEstAirtimeFor(len));
+#endif
 
   if (_logging) {
     File f = openAppend(PACKET_LOG_FILE);
@@ -507,6 +511,9 @@ void MyMesh::logTx(mesh::Packet *pkt, int len) {
   if (_prefs.bridge_pkt_src == 0) {
     bridge.sendPacket(pkt);
   }
+#endif
+#ifdef WITH_MQTT_UPLINK
+  mqtt.publishPacket(*pkt, true, (int)_radio->getLastRSSI(), _radio->getLastSNR());
 #endif
 
   if (_logging) {
@@ -873,6 +880,10 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
 #if defined(WITH_ESPNOW_BRIDGE)
       , bridge(&_prefs, _mgr, &rtc)
 #endif
+#if defined(WITH_MQTT_UPLINK)
+      , wifi_link()
+      , mqtt(rtc, self_id)
+#endif
 {
   last_millis = 0;
   uptime_millis = 0;
@@ -975,6 +986,17 @@ void MyMesh::begin(FILESYSTEM *fs) {
   if (_prefs.bridge_enabled) {
     bridge.begin();
   }
+#endif
+
+#if defined(WITH_MQTT_UPLINK)
+  mqtt.setNodeNameSource(_prefs.node_name);
+  mqtt.setFirmwareVersion(FIRMWARE_VERSION);
+  mqtt.setNetworkStateProvider(&wifi_link);
+  mqtt.begin(_fs);
+  wifi_link.setConfig(&mqtt.getPrefs());
+#if defined(ESP_PLATFORM)
+  board.setInhibitSleep(true);  // observer: keep LoRa + WiFi radios alive
+#endif
 #endif
 
   radio_driver.setParams(_prefs.freq, _prefs.bw, _prefs.sf, _prefs.cr);
@@ -1281,6 +1303,111 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
       sendNodeDiscoverReq();
       strcpy(reply, "OK - Discover sent");
     }
+#if defined(WITH_MQTT_UPLINK)
+  } else if (memcmp(command, "get wifi.status", 15) == 0) {
+    wifi_link.formatWifiStatusReply(reply, 160);
+  } else if (memcmp(command, "get wifi.ssid", 13) == 0) {
+    sprintf(reply, "> %s", wifi_link.getWifiSSID()[0] ? wifi_link.getWifiSSID() : "-");
+  } else if (memcmp(command, "get wifi.powersaving", 20) == 0) {
+    sprintf(reply, "> %s", wifi_link.getWifiPowerSave());
+  } else if (memcmp(command, "set wifi.ssid ", 14) == 0) {
+    if (wifi_link.setWifiSSID(&command[14])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad wifi.ssid");
+    }
+  } else if (memcmp(command, "set wifi.pwd ", 13) == 0) {
+    if (wifi_link.setWifiPassword(&command[13])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad wifi.pwd");
+    }
+  } else if (memcmp(command, "set wifi.powersaving ", 21) == 0) {
+    if (wifi_link.setWifiPowerSave(&command[21])) {
+      mqtt.savePrefs();
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - use none|min|max");
+    }
+  } else if (strcmp(command, "get mqtt.status") == 0) {
+    mqtt.formatStatusReply(reply, 160);
+  } else if (strcmp(command, "get mqtt.statuscfg") == 0) {
+    sprintf(reply, "> %s", mqtt.isStatusEnabled() ? "on" : "off");
+  } else if (strcmp(command, "send mqtt.status") == 0) {
+    if (mqtt.sendStatusNow()) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - mqtt status unavailable");
+    }
+  } else if (strcmp(command, "get mqtt.client_version") == 0) {
+    sprintf(reply, "> %s", mqtt.getClientVersion());
+  } else if (memcmp(command, "get mqtt.iata", 13) == 0) {
+    sprintf(reply, "> %s", mqtt.getIata());
+  } else if (memcmp(command, "get mqtt.owner", 14) == 0) {
+    sprintf(reply, "> %s", mqtt.getOwnerPublicKey()[0] ? mqtt.getOwnerPublicKey() : "-");
+  } else if (memcmp(command, "get mqtt.email", 14) == 0) {
+    sprintf(reply, "> %s", mqtt.getOwnerEmail()[0] ? mqtt.getOwnerEmail() : "-");
+  } else if (memcmp(command, "get mqtt.packets", 16) == 0) {
+    sprintf(reply, "> %s", mqtt.isPacketsEnabled() ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.raw", 12) == 0) {
+    sprintf(reply, "> %s", mqtt.isRawEnabled() ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.tx", 11) == 0) {
+    sprintf(reply, "> %s", mqtt.isTxEnabled() ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.meshcoretel", 20) == 0) {
+    sprintf(reply, "> %s", mqtt.isEndpointEnabled(0x01) ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.letsmesh-eu", 20) == 0 || memcmp(command, "get mqtt.letsmesh.eu", 20) == 0) {
+    sprintf(reply, "> %s", mqtt.isEndpointEnabled(0x02) ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.letsmesh-us", 20) == 0 || memcmp(command, "get mqtt.letsmesh.us", 20) == 0) {
+    sprintf(reply, "> %s", mqtt.isEndpointEnabled(0x04) ? "on" : "off");
+  } else if (memcmp(command, "set mqtt.iata ", 14) == 0) {
+    if (mqtt.setIata(&command[14])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad mqtt.iata");
+    }
+  } else if (memcmp(command, "set mqtt.owner ", 15) == 0) {
+    if (mqtt.setOwnerPublicKey(&command[15])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - owner must be 64 hex chars");
+    }
+  } else if (memcmp(command, "set mqtt.email ", 15) == 0) {
+    if (mqtt.setOwnerEmail(&command[15])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad mqtt.email");
+    }
+  } else if (memcmp(command, "set mqtt.packets ", 17) == 0) {
+    mqtt.setPacketsEnabled(memcmp(&command[17], "on", 2) == 0);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.raw ", 13) == 0) {
+    mqtt.setRawEnabled(memcmp(&command[13], "on", 2) == 0);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.status ", 16) == 0) {
+    mqtt.setStatusEnabled(memcmp(&command[16], "on", 2) == 0);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.tx ", 12) == 0) {
+    mqtt.setTxEnabled(memcmp(&command[12], "on", 2) == 0);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.meshcoretel ", 21) == 0) {
+    if (mqtt.setEndpointEnabled(0x01, memcmp(&command[21], "on", 2) == 0)) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - max 2 mqtt brokers");
+    }
+  } else if (memcmp(command, "set mqtt.letsmesh-eu ", 21) == 0 || memcmp(command, "set mqtt.letsmesh.eu ", 21) == 0) {
+    if (mqtt.setEndpointEnabled(0x02, memcmp(&command[21], "on", 2) == 0)) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - max 2 mqtt brokers");
+    }
+  } else if (memcmp(command, "set mqtt.letsmesh-us ", 21) == 0 || memcmp(command, "set mqtt.letsmesh.us ", 21) == 0) {
+    if (mqtt.setEndpointEnabled(0x04, memcmp(&command[21], "on", 2) == 0)) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - max 2 mqtt brokers");
+    }
+#endif
   } else{
     _cli.handleCommand(sender_timestamp, command, reply);  // common CLI commands
   }
@@ -1292,6 +1419,24 @@ void MyMesh::loop() {
 #endif
 
   mesh::Mesh::loop();
+
+#if defined(WITH_MQTT_UPLINK)
+  wifi_link.loop(mqtt.isActive());
+  MQTTStatusSnapshot mqtt_status{};
+  mqtt_status.battery_mv = (int)board.getBattMilliVolts();
+  mqtt_status.uptime_secs = (uint32_t)(uptime_millis / 1000);
+  mqtt_status.error_flags = _err_flags;
+  mqtt_status.queue_len = (uint16_t)_mgr->getOutboundTotal();
+  mqtt_status.noise_floor = _radio->getNoiseFloor();
+  mqtt_status.tx_air_secs = (uint32_t)(getTotalAirTime() / 1000);
+  mqtt_status.rx_air_secs = (uint32_t)(getReceiveAirTime() / 1000);
+  mqtt_status.recv_errors = radio_driver.getPacketsRecvErrors();
+  mqtt_status.radio_freq = _prefs.freq;
+  mqtt_status.radio_bw = _prefs.bw;
+  mqtt_status.radio_sf = _prefs.sf;
+  mqtt_status.radio_cr = _prefs.cr;
+  mqtt.loop(mqtt_status);
+#endif
 
   if (next_flood_advert && millisHasNowPassed(next_flood_advert)) {
     mesh::Packet *pkt = createSelfAdvert();
@@ -1335,6 +1480,9 @@ void MyMesh::loop() {
 bool MyMesh::hasPendingWork() const {
 #if defined(WITH_BRIDGE)
   if (bridge.isRunning()) return true;  // bridge needs WiFi radio, can't sleep
+#endif
+#if defined(WITH_MQTT_UPLINK)
+  if (mqtt.isActive()) return true;  // observer uplink needs WiFi radio, can't sleep
 #endif
   return _mgr->getOutboundTotal() > 0;
 }
