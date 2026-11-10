@@ -9,7 +9,7 @@
 ```sh
 cd MeshCore
 git checkout mqtt-uplink
-./scripts/build-observer-meshcoretel.sh
+./scripts/build-observer_meshcoretel.sh
 ```
 
 Без аргументов скрипт:
@@ -20,18 +20,18 @@ git checkout mqtt-uplink
    скрипт останавливается и печатает, что делать (`git rebase --continue`
    после разрешения, или `git rebase --abort` для отмены);
 3. собирает **все 17** окружений `*_observer_meshcoretel`;
-4. складывает свежие образы в `out/observer-meshcoretel/<новая-версия>/<env>/`.
+4. складывает свежие образы в `out/observer_meshcoretel/<новая-версия>/<env>/`.
 
 Чтобы собрать под конкретный релиз, а не новейший:
 
 ```sh
-./scripts/build-observer-meshcoretel.sh repeater-v1.19.0
+./scripts/build-observer_meshcoretel.sh repeater-v1.19.0
 ```
 
 Только одна плата (быстрая проверка перед полной матрицей):
 
 ```sh
-./scripts/build-observer-meshcoretel.sh repeater-v1.19.0 --env Heltec_v3_observer_meshcoretel
+./scripts/build-observer_meshcoretel.sh repeater-v1.19.0 --env Heltec_v3_observer_meshcoretel
 ```
 
 ## Что проверить перед прошивкой парка
@@ -58,7 +58,7 @@ git checkout mqtt-uplink
    ```sh
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-       write_flash 0x0 out/observer-meshcoretel/<версия>/<env>/firmware-merged.bin
+       write_flash 0x0 out/observer_meshcoretel/<версия>/<env>/firmware-merged.bin
    ```
 
 Чистая установка стирает файловую систему: узел генерирует **новую identity**,

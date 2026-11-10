@@ -1,7 +1,7 @@
 # Сборка прошивки наблюдателя с нуля
 
 Для машины, на которой этот проект ещё никогда не собирался. Результат —
-прошиваемые образы в `out/observer-meshcoretel/<версия>/`.
+прошиваемые образы в `out/observer_meshcoretel/<версия>/`.
 
 ## 1. Что нужно установить
 
@@ -44,7 +44,7 @@ pio run -e Heltec_v3_observer_meshcoretel
 **Все поддерживаемые платы** (рекомендуется — через релизный скрипт):
 
 ```sh
-./scripts/build-observer-meshcoretel.sh
+./scripts/build-observer_meshcoretel.sh
 ```
 
 Скрипт: добавляет git-remote на upstream `meshcore-dev/MeshCore`, берёт
@@ -66,7 +66,7 @@ Flash: [====      ]  40.3% (used 1347317 bytes from 3342336 bytes)
 ## 4. Где лежит прошивка
 
 ```
-out/observer-meshcoretel/<версия>/<env>/
+out/observer_meshcoretel/<версия>/<env>/
   firmware-merged.bin   ← прошиваем этот файл (bootloader + разделы + прошивка)
   firmware.bin          ← только приложение
   bootloader.bin, partitions.bin
@@ -90,7 +90,7 @@ pio run -e Heltec_v3_observer_meshcoretel -t upload --upload-port /dev/ttyUSB0
 
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
+    write_flash 0x0 out/observer_meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
 ```
 
 `firmware-merged.bin` записывает bootloader, таблицу разделов и приложение
@@ -106,12 +106,12 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer-meshcoretel/<версия>/<env>/firmware-merged.bin
+    write_flash 0x0 out/observer_meshcoretel/<версия>/<env>/firmware-merged.bin
 ```
 
 (`erase_flash` стирает и файловую систему — identity и настройки сбрасываются.)
 Чтобы убедиться, что загрузилась нужная сборка: на экране загрузки `v1.18.0`,
-а `get mqtt.client_version` отвечает `observer-meshcoretel`.
+а `get mqtt.client_version` отвечает `observer_meshcoretel_v0.1.0`.
 
 Браузерная прошивка тоже работает: на `flasher.meshcore.dev` сначала выберите
 плату, затем пункт **Custom Firmware** и укажите наш `firmware-merged.bin`.

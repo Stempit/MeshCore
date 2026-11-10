@@ -1,6 +1,7 @@
 #include "MQTTUplink.h"
 #include "MQTTCaCerts.h"
 #include "WifiLink.h"
+#include "ModVersion.h"
 
 #ifdef WITH_MQTT_UPLINK
 
@@ -16,7 +17,7 @@
 #include <time.h>
 
 #ifndef CLIENT_VERSION
-  #define CLIENT_VERSION "observer-meshcoretel"
+  #define CLIENT_VERSION "observer_meshcoretel_" MESHCORETEL_MOD_VERSION
 #endif
 
 #ifndef MQTT_DEBUG

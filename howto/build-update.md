@@ -9,7 +9,7 @@ board and re-flash your nodes.
 ```sh
 cd MeshCore
 git checkout mqtt-uplink
-./scripts/build-observer-meshcoretel.sh
+./scripts/build-observer_meshcoretel.sh
 ```
 
 With no arguments the script:
@@ -20,18 +20,18 @@ With no arguments the script:
    stops and prints exactly what to do (`git rebase --continue` after
    resolving, or `git rebase --abort` to give up);
 3. builds **all 17** `*_observer_meshcoretel` environments;
-4. writes fresh images to `out/observer-meshcoretel/<new-version>/<env>/`.
+4. writes fresh images to `out/observer_meshcoretel/<new-version>/<env>/`.
 
 To target a specific release instead of the newest one:
 
 ```sh
-./scripts/build-observer-meshcoretel.sh repeater-v1.19.0
+./scripts/build-observer_meshcoretel.sh repeater-v1.19.0
 ```
 
 One board only (quick smoke test before the full matrix):
 
 ```sh
-./scripts/build-observer-meshcoretel.sh repeater-v1.19.0 --env Heltec_v3_observer_meshcoretel
+./scripts/build-observer_meshcoretel.sh repeater-v1.19.0 --env Heltec_v3_observer_meshcoretel
 ```
 
 ## What to check before flashing the fleet
@@ -57,7 +57,7 @@ firmware-compatibility question (old versions, OTA slots, partition layouts):
    ```sh
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-       write_flash 0x0 out/observer-meshcoretel/<version>/<env>/firmware-merged.bin
+       write_flash 0x0 out/observer_meshcoretel/<version>/<env>/firmware-merged.bin
    ```
 
 A clean install wipes the filesystem: the node generates a **new identity**

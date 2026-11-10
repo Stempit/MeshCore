@@ -23,7 +23,7 @@ outages (flushed after 60 s disconnected; oldest replaced when full).
 
 Env definitions live in the repo-root `observer_meshcoretel.ini`
 (`*_observer_meshcoretel` environments). Build with
-`scripts/build-observer-meshcoretel.sh` or
+`scripts/build-observer_meshcoretel.sh` or
 `pio run -e <board>_observer_meshcoretel`.
 
 ## Configure (serial or mesh remote-admin CLI)

@@ -1,7 +1,7 @@
 # Building the observer firmware from scratch
 
 Target audience: a fresh machine that has never built this project. End
-result: flashable firmware images in `out/observer-meshcoretel/<version>/`.
+result: flashable firmware images in `out/observer_meshcoretel/<version>/`.
 
 ## 1. Prerequisites
 
@@ -44,7 +44,7 @@ pio run -e Heltec_v3_observer_meshcoretel
 **All supported boards** (recommended — uses the release script):
 
 ```sh
-./scripts/build-observer-meshcoretel.sh
+./scripts/build-observer_meshcoretel.sh
 ```
 
 The script: adds a git remote to upstream `meshcore-dev/MeshCore`, picks the
@@ -66,7 +66,7 @@ partition override.
 ## 4. Where the firmware is
 
 ```
-out/observer-meshcoretel/<version>/<env>/
+out/observer_meshcoretel/<version>/<env>/
   firmware-merged.bin   ← flash this (bootloader + partitions + firmware)
   firmware.bin          ← app only
   bootloader.bin, partitions.bin
@@ -90,7 +90,7 @@ board: `esp32`, `esp32s3`, `esp32c3`):
 
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
+    write_flash 0x0 out/observer_meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
 ```
 
 `firmware-merged.bin` writes bootloader, partition table and app in one go —
@@ -105,12 +105,12 @@ doubt, wipe first and flash the merged image:
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer-meshcoretel/<version>/<env>/firmware-merged.bin
+    write_flash 0x0 out/observer_meshcoretel/<version>/<env>/firmware-merged.bin
 ```
 
 (`erase_flash` wipes the filesystem too — identity and settings are reset.)
 To confirm you booted the right build: boot screen shows `v1.18.0`, and
-`get mqtt.client_version` replies `observer-meshcoretel`.
+`get mqtt.client_version` replies `observer_meshcoretel_v0.1.0`.
 
 Browser flashing also works: on `flasher.meshcore.dev` select the board
 **first**, then use its **Custom Firmware** option and pick our

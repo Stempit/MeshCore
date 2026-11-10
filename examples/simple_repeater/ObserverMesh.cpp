@@ -2,6 +2,7 @@
 
 #if defined(WITH_MQTT_UPLINK)
 
+#include <helpers/mqtt/ModVersion.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -42,10 +43,14 @@ void ObserverMesh::begin(FILESYSTEM* fs) {
 
   MyMesh::begin(fs);
 
-  // Build stamp travels in the status JSON's firmware_version field so the
-  // server can tell builds apart; the release script touches this file before
-  // building so __DATE__/__TIME__ are always fresh.
-  mqtt.setFirmwareVersion(FIRMWARE_VERSION " built " __DATE__ " " __TIME__);
+  // Server-visible version identity: "<base>_meshcoretel[_kvx]_mod_<ver>"
+  // (ModVersion.h). The base release the build is from stays on the boot
+  // screen; the serial line additionally carries the build time.
+#ifdef WITH_KVX_DEFAULTS
+  mqtt.setFirmwareVersion(FIRMWARE_VERSION "_meshcoretel_kvx_mod_" MESHCORETEL_MOD_VERSION);
+#else
+  mqtt.setFirmwareVersion(FIRMWARE_VERSION "_meshcoretel_mod_" MESHCORETEL_MOD_VERSION);
+#endif
   Serial.printf("[observer] firmware built " __DATE__ " " __TIME__ "\n");
   mqtt.setNodeNameSource(getNodePrefs()->node_name);
   mqtt.setBoardModel(board.getManufacturerName());

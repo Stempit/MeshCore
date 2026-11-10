@@ -60,7 +60,7 @@ board_build.partitions = min_spiffs.csv
 ### 4. Зарегистрируйте плату в релизном скрипте
 
 Добавьте имя нового окружения в `ALL_ENVS` в
-`scripts/build-observer-meshcoretel.sh`, чтобы релизные сборки его включали.
+`scripts/build-observer_meshcoretel.sh`, чтобы релизные сборки его включали.
 Для семейств KVX добавьте окружение также в `observer_meshcoretel_kvx.ini`
 (наследует ваше `_observer_meshcoretel`) или `repeater_kvx.ini` (наследует
 upstream repeater-окружение), дописав только:
@@ -72,7 +72,7 @@ build_flags = ${env:<parent>.build_flags} -D WITH_KVX_DEFAULTS=1
 ### 5. Проверьте
 
 ```sh
-./scripts/build-observer-meshcoretel.sh --env <Board>_observer_meshcoretel
+./scripts/build-observer_meshcoretel.sh --env <Board>_observer_meshcoretel
 ```
 
 Затем прошейте и настройте узел как обычно ([setup.ru.md](setup.ru.md)) —
