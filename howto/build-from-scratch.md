@@ -96,6 +96,22 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
 `firmware-merged.bin` writes bootloader, partition table and app in one go —
 always prefer it over assembling offsets by hand.
 
+⚠️ **Never flash `firmware.bin` alone on a device that ran other firmware.**
+The repeater builds use OTA0/OTA1 partitions: a bare `firmware.bin` written to
+one slot can be ignored by the bootloader, which keeps booting the *old*
+firmware from the other slot (boot screen still shows the old version). If in
+doubt, wipe first and flash the merged image:
+
+```sh
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+    write_flash 0x0 out/observer-meshcoretel/<version>/<env>/firmware-merged.bin
+```
+
+(`erase_flash` wipes the filesystem too — identity and settings are reset.)
+To confirm you booted the right build: boot screen shows `v1.18.0`, and
+`get mqtt.client_version` replies `observer-meshcoretel`.
+
 Then continue with [setup.md](setup.md).
 
 ## Troubleshooting

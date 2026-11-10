@@ -96,6 +96,23 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
 `firmware-merged.bin` записывает bootloader, таблицу разделов и приложение
 одной командой — всегда предпочитайте его ручному подбору смещений.
 
+⚠️ **Никогда не прошивайте один `firmware.bin` на устройство, где стояла
+другая прошивка.** Сборки ретранслятора используют разделы OTA0/OTA1:
+голый `firmware.bin`, записанный в один слот, загрузчик может проигнорировать
+и продолжить загружать *старую* прошивку из другого слота (на экране загрузки
+останется старая версия). Если есть сомнения — сначала сотрите флеш и
+прошейте merged-образ:
+
+```sh
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+    write_flash 0x0 out/observer-meshcoretel/<версия>/<env>/firmware-merged.bin
+```
+
+(`erase_flash` стирает и файловую систему — identity и настройки сбрасываются.)
+Чтобы убедиться, что загрузилась нужная сборка: на экране загрузки `v1.18.0`,
+а `get mqtt.client_version` отвечает `observer-meshcoretel`.
+
 Дальше — [setup.ru.md](setup.ru.md).
 
 ## Если что-то не получилось
