@@ -4,7 +4,6 @@
 
 #include <Mesh.h>
 #include <helpers/mqtt/NetworkStateProvider.h>
-#include <target.h>
 
 #include "JWTHelper.h"
 #include "MQTTPrefs.h"
@@ -35,12 +34,10 @@ public:
   explicit MQTTUplink(mesh::RTCClock& rtc, mesh::LocalIdentity& identity);
 
   void begin(FILESYSTEM* fs);
-  void end();
   void loop(const MQTTStatusSnapshot& snapshot);
   void publishPacket(const mesh::Packet& packet, bool is_tx, int rssi, float snr, int score = -1,
                      int duration = -1);
 
-  bool isRunning() const { return _running; }
   bool isActive() const;
 
   void formatStatusReply(char* reply, size_t reply_size) const;
@@ -66,13 +63,13 @@ public:
   const char* getClientVersion() const;
   void setNodeNameSource(const char* node_name) { _node_name = node_name; }
   void setFirmwareVersion(const char* firmware_version) { _firmware_version = firmware_version; }
+  void setBoardModel(const char* board_model) { _board_model = board_model; }
   bool setOwnerPublicKey(const char* owner_public_key);
   const char* getOwnerPublicKey() const { return _prefs.owner_public_key; }
   bool setOwnerEmail(const char* owner_email);
   const char* getOwnerEmail() const { return _prefs.owner_email; }
   bool sendStatusNow();
   bool isAnyBrokerConnected() const;
-  const char* getAggregateBrokerState() const;
   void setNetworkStateProvider(NetworkStateProvider* network) { _network = network; }
   MQTTPrefs& getPrefs() { return _prefs; }
   bool savePrefs();
@@ -91,6 +88,13 @@ private:
   };
 
   struct BrokerState {
+    // NOTE on state ownership: `client`, `connected`, `reconnect_pending`,
+    // `next_connect_attempt`, `reconnect_failures`, `refused_count` and
+    // `connected_since_ms` are written from BOTH the esp-mqtt client task
+    // (handleMqttEvent) and the Arduino loop task (ensureBroker/loop). All
+    // fields are word-sized so reads/writes are atomic on ESP32; the only
+    // consequence of a race is a delayed or duplicate-scheduled reconnect —
+    // never corruption or a crash. This mirrors the upstream VBart design.
     const BrokerSpec* spec;
     esp_mqtt_client_handle_t client;
     bool connected;
@@ -127,6 +131,7 @@ private:
   char _device_id[65];
   const char* _node_name;
   const char* _firmware_version;
+  const char* _board_model;
   NetworkStateProvider* _network;
 
 #if defined(ESP_PLATFORM)
@@ -173,7 +178,6 @@ private:
   bool publishToConnected(const char* topic, const char* payload, bool retain);
   void drainQueue(unsigned long now_ms);
   void flushQueue();
-  uint8_t queueDepth() const { return _queue_len; }
   int buildStatusJson(char* buffer, size_t buffer_size, bool online) const;
   int buildPacketJson(char* buffer, size_t buffer_size, const mesh::Packet& packet, bool is_tx, int rssi, float snr,
                       int score, int duration) const;

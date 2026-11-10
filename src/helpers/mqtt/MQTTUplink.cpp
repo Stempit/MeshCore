@@ -37,7 +37,7 @@ constexpr unsigned long kBrokerRetryMaxMillis = 300000;
 constexpr size_t kBrokerTokenSize = 640;
 constexpr time_t kTokenLifetimeSecs = 3600;
 constexpr time_t kTokenRefreshSlackSecs = 300;
-constexpr time_t kMinSaneEpoch = 1735689600;  // 2025-01-01T00:00:00Z
+constexpr time_t kMinTokenEpoch = 1735689600;  // 2025-01-01T00:00:00Z
 
 unsigned long getBrokerRetryDelayMillis(uint8_t failures) {
   unsigned long delay_ms = kBrokerRetryBaseMillis;
@@ -97,7 +97,7 @@ const MQTTUplink::BrokerSpec MQTTUplink::kBrokerSpecs[3] = {
 
 MQTTUplink::MQTTUplink(mesh::RTCClock&, mesh::LocalIdentity& identity)
     : _fs(nullptr), _identity(&identity), _running(false), _last_status_publish(0), _last_status{},
-      _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _network(nullptr), _queue{}, _queue_len(0),
+      _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _board_model(nullptr), _network(nullptr), _queue{}, _queue_len(0),
       _event_retry_at(0), _no_broker_since(0), _stat_rx(0), _stat_pub(0), _stat_drop(0), _brokers{} {
   memset(_device_id, 0, sizeof(_device_id));
   MQTTPrefsStore::setDefaults(_prefs);
@@ -268,7 +268,7 @@ void MQTTUplink::refreshBrokerIdentity(BrokerState& broker) {
 
 void MQTTUplink::refreshBrokerState(BrokerState& broker) {
   char model[48];
-  escapeJsonString(board.getManufacturerName(), model, sizeof(model));
+  escapeJsonString(_board_model != nullptr ? _board_model : "unknown", model, sizeof(model));
   char origin[80];
   const char* node_name = (_node_name != nullptr && _node_name[0] != 0) ? _node_name : _device_id;
   escapeJsonString(node_name, origin, sizeof(origin));
@@ -289,7 +289,7 @@ void MQTTUplink::refreshBrokerState(BrokerState& broker) {
 
 bool MQTTUplink::refreshToken(BrokerState& broker) {
   time_t now = time(nullptr);
-  if (now < kMinSaneEpoch) {
+  if (now < kMinTokenEpoch) {
     MQTT_LOG("%s token skipped: clock not ready (%lu)", broker.spec->label, static_cast<unsigned long>(now));
     return false;
   }
@@ -454,7 +454,7 @@ int MQTTUplink::buildStatusJson(char* buffer, size_t buffer_size, bool online) c
   char ts[32];
   formatIsoTimestamp(time(nullptr), ts, sizeof(ts));
   char model[48];
-  escapeJsonString(board.getManufacturerName(), model, sizeof(model));
+  escapeJsonString(_board_model != nullptr ? _board_model : "unknown", model, sizeof(model));
   char origin[80];
   const char* node_name = (_node_name != nullptr && _node_name[0] != 0) ? _node_name : _device_id;
   escapeJsonString(node_name, origin, sizeof(origin));
@@ -856,15 +856,6 @@ void MQTTUplink::begin(FILESYSTEM* fs) {
   MQTT_LOG("begin iata=%s enabled_mask=0x%02X", _prefs.iata, _prefs.enabled_mask);
 }
 
-void MQTTUplink::end() {
-  MQTT_LOG("end");
-  publishStatus(false);
-  for (BrokerState& broker : _brokers) {
-    destroyBroker(broker);
-  }
-  _running = false;
-}
-
 void MQTTUplink::loop(const MQTTStatusSnapshot& snapshot) {
   if (!_running) {
     return;
@@ -990,7 +981,7 @@ void MQTTUplink::formatStatusReply(char* reply, size_t reply_size) const {
       return "off";
     }
     if (isUnsetIataValue(_prefs.iata)) {
-      return "invalid iata";
+      return "invalid-iata";
     }
     const BrokerState* broker = nullptr;
     for (const BrokerState& candidate : _brokers) {
@@ -1017,19 +1008,21 @@ void MQTTUplink::formatStatusReply(char* reply, size_t reply_size) const {
     return "retry";
   };
 
+  // The mesh remote-admin CLI passes a reply buffer of only ~161 usable bytes
+  // (MyMesh onPeerDataRecv: uint8_t temp[166], reply = &temp[5]); this line is
+  // sized so its worst case (~150 chars) always fits. Caller caps at 160.
   snprintf(reply, reply_size,
-           "> wifi:%s ntp:%s iata:%s meshcoretel:%s letsmesh-eu:%s letsmesh-us:%s status:%s tx:%s "
-           "rx:%lu pub:%lu drop:%lu q:%u/%u heap:%u/%u",
+           "> wifi:%s ntp:%s iata:%s meshcoretel:%s eu:%s us:%s tx:%s "
+           "pkt:%lu pub:%lu drop:%lu q:%u/%u heap:%u",
            (_network != nullptr && _network->isWifiConnected()) ? "up" : "down",
            (_network != nullptr && _network->hasTimeSync()) ? "up" : "wait",
            _prefs.iata,
            broker_state(kMeshcoretelBit), broker_state(kLetsmeshEuBit), broker_state(kLetsmeshUsBit),
-           _prefs.status_enabled ? "on" : "off",
            _prefs.tx_mode == 0 ? "off" : (_prefs.tx_mode == 1 ? "on" : "advert"),
            static_cast<unsigned long>(_stat_rx), static_cast<unsigned long>(_stat_pub),
            static_cast<unsigned long>(_stat_drop),
            static_cast<unsigned>(_queue_len), static_cast<unsigned>(kQueueCapacity),
-           static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMaxAllocHeap()));
+           static_cast<unsigned>(ESP.getFreeHeap()));
 }
 
 bool MQTTUplink::handleCliCommand(WifiLink& wifi, const char* command, char* reply) {
@@ -1041,12 +1034,14 @@ bool MQTTUplink::handleCliCommand(WifiLink& wifi, const char* command, char* rep
     sprintf(reply, "> %s", wifi.getWifiPowerSave());
   } else if (memcmp(command, "set wifi.ssid ", 14) == 0) {
     if (wifi.setWifiSSID(&command[14])) {
+      savePrefs();
       strcpy(reply, "OK");
     } else {
       strcpy(reply, "Err - bad wifi.ssid");
     }
   } else if (memcmp(command, "set wifi.pwd ", 13) == 0) {
     if (wifi.setWifiPassword(&command[13])) {
+      savePrefs();
       strcpy(reply, "OK");
     } else {
       strcpy(reply, "Err - bad wifi.pwd");
@@ -1063,7 +1058,7 @@ bool MQTTUplink::handleCliCommand(WifiLink& wifi, const char* command, char* rep
     wifi.reconnectWifi();
     strcpy(reply, "OK - Wi-Fi reset requested");
   } else if (strcmp(command, "get mqtt.status") == 0) {
-    formatStatusReply(reply, 240);
+    formatStatusReply(reply, 160);  // mesh CLI path only has ~161 usable reply bytes
   } else if (strcmp(command, "get mqtt.statuscfg") == 0) {
     sprintf(reply, "> %s", isStatusEnabled() ? "on" : "off");
   } else if (strcmp(command, "send mqtt.status") == 0) {
@@ -1111,19 +1106,19 @@ bool MQTTUplink::handleCliCommand(WifiLink& wifi, const char* command, char* rep
       strcpy(reply, "Err - bad mqtt.email");
     }
   } else if (memcmp(command, "set mqtt.packets ", 17) == 0) {
-    setPacketsEnabled(memcmp(&command[17], "on", 2) == 0);
+    setPacketsEnabled(strncmp(&command[17], "on", 2) == 0);
     strcpy(reply, "OK");
   } else if (memcmp(command, "set mqtt.raw ", 13) == 0) {
-    setRawEnabled(memcmp(&command[13], "on", 2) == 0);
+    setRawEnabled(strncmp(&command[13], "on", 2) == 0);
     strcpy(reply, "OK");
   } else if (memcmp(command, "set mqtt.status ", 16) == 0) {
-    setStatusEnabled(memcmp(&command[16], "on", 2) == 0);
+    setStatusEnabled(strncmp(&command[16], "on", 2) == 0);
     strcpy(reply, "OK");
   } else if (memcmp(command, "set mqtt.tx ", 12) == 0) {
     uint8_t mode;
-    if (memcmp(&command[12], "on", 2) == 0) {
+    if (strncmp(&command[12], "on", 2) == 0) {
       mode = 1;
-    } else if (memcmp(&command[12], "advert", 6) == 0) {
+    } else if (strncmp(&command[12], "advert", 6) == 0) {
       mode = 2;
     } else {
       mode = 0;
@@ -1131,19 +1126,19 @@ bool MQTTUplink::handleCliCommand(WifiLink& wifi, const char* command, char* rep
     setTxMode(mode);
     strcpy(reply, "OK");
   } else if (memcmp(command, "set mqtt.meshcoretel ", 21) == 0) {
-    if (setEndpointEnabled(0x01, memcmp(&command[21], "on", 2) == 0)) {
+    if (setEndpointEnabled(0x01, strncmp(&command[21], "on", 2) == 0)) {
       strcpy(reply, "OK");
     } else {
       strcpy(reply, "Err - max 2 mqtt brokers");
     }
   } else if (memcmp(command, "set mqtt.letsmesh-eu ", 21) == 0 || memcmp(command, "set mqtt.letsmesh.eu ", 21) == 0) {
-    if (setEndpointEnabled(0x02, memcmp(&command[21], "on", 2) == 0)) {
+    if (setEndpointEnabled(0x02, strncmp(&command[21], "on", 2) == 0)) {
       strcpy(reply, "OK");
     } else {
       strcpy(reply, "Err - max 2 mqtt brokers");
     }
   } else if (memcmp(command, "set mqtt.letsmesh-us ", 21) == 0 || memcmp(command, "set mqtt.letsmesh.us ", 21) == 0) {
-    if (setEndpointEnabled(0x04, memcmp(&command[21], "on", 2) == 0)) {
+    if (setEndpointEnabled(0x04, strncmp(&command[21], "on", 2) == 0)) {
       strcpy(reply, "OK");
     } else {
       strcpy(reply, "Err - max 2 mqtt brokers");
@@ -1253,6 +1248,21 @@ bool MQTTUplink::setOwnerEmail(const char* owner_email) {
   if (owner_email == nullptr) {
     return false;
   }
+  // The email is embedded unescaped in the LetsMesh JWT payload; keep it to a
+  // safe, short charset so it can neither break the JSON nor overflow the
+  // base64 budget in JWTHelper.
+  size_t len = strlen(owner_email);
+  if (len >= 64) {
+    return false;
+  }
+  for (size_t i = 0; i < len; ++i) {
+    char c = owner_email[i];
+    bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '@' || c == '.' ||
+              c == '_' || c == '-' || c == '+';
+    if (!ok) {
+      return false;
+    }
+  }
   StrHelper::strncpy(_prefs.owner_email, owner_email, sizeof(_prefs.owner_email));
   return savePrefs();
 }
@@ -1266,40 +1276,17 @@ bool MQTTUplink::isAnyBrokerConnected() const {
   return false;
 }
 
-const char* MQTTUplink::getAggregateBrokerState() const {
-  uint8_t enabled_count = 0;
-  uint8_t connected_count = 0;
-
-  for (const BrokerState& broker : _brokers) {
-    if (broker.spec == nullptr || (broker.spec->bit & _prefs.enabled_mask) == 0) {
-      continue;
-    }
-    enabled_count++;
-    if (broker.connected) {
-      connected_count++;
-    }
-  }
-
-  if (enabled_count == 0 || connected_count == 0) {
-    return "down";
-  }
-  if (connected_count < enabled_count) {
-    return "degraded";
-  }
-  return "up";
-}
 
 #else
 
 MQTTUplink::MQTTUplink(mesh::RTCClock&, mesh::LocalIdentity&)
     : _fs(nullptr), _identity(nullptr), _running(false), _last_status_publish(0), _last_status{},
-      _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _network(nullptr) {
+      _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _board_model(nullptr), _network(nullptr) {
   MQTTPrefsStore::setDefaults(_prefs);
 }
 
 bool MQTTUplink::savePrefs() { return false; }
 void MQTTUplink::begin(FILESYSTEM*) {}
-void MQTTUplink::end() {}
 void MQTTUplink::loop(const MQTTStatusSnapshot&) {}
 void MQTTUplink::publishPacket(const mesh::Packet&, bool, int, float, int, int) {}
 void MQTTUplink::formatStatusReply(char* reply, size_t reply_size) const { snprintf(reply, reply_size, "> unsupported"); }
@@ -1317,7 +1304,6 @@ bool MQTTUplink::setOwnerPublicKey(const char*) { return false; }
 bool MQTTUplink::setOwnerEmail(const char*) { return false; }
 bool MQTTUplink::sendStatusNow() { return false; }
 bool MQTTUplink::isAnyBrokerConnected() const { return false; }
-const char* MQTTUplink::getAggregateBrokerState() const { return "down"; }
 
 #endif
 

@@ -82,7 +82,7 @@ echo ">> git fetch upstream (tags)"
 git fetch upstream --tags --quiet
 
 if [[ -z "$TARGET" ]]; then
-  TARGET="$(git tag --list 'repeater-v*' --sort=-v:refname --format='%(refname:short)' upstream/main | head -1)"
+  TARGET="$(git tag --list 'repeater-v*' --merged upstream/main --sort=-v:refname --format='%(refname:short)' | head -1)"
   if [[ -z "$TARGET" ]]; then
     echo "ERROR: no repeater-v* tag found on upstream" >&2
     exit 1

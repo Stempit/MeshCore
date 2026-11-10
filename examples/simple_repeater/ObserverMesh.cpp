@@ -7,6 +7,7 @@ void ObserverMesh::begin(FILESYSTEM* fs) {
 
   mqtt.setNodeNameSource(getNodePrefs()->node_name);
   mqtt.setFirmwareVersion(FIRMWARE_VERSION);
+  mqtt.setBoardModel(board.getManufacturerName());
   mqtt.setNetworkStateProvider(&wifi_link);
   mqtt.begin(fs);
   wifi_link.setConfig(&mqtt.getPrefs());
@@ -66,6 +67,8 @@ void ObserverMesh::logRx(mesh::Packet* pkt, int len, float score) {
 void ObserverMesh::logTx(mesh::Packet* pkt, int len) {
   MyMesh::logTx(pkt, len);
 #if defined(ESP_PLATFORM)
+  // SNR/RSSI of a transmission don't exist; the VBart-format convention is to
+  // report the last received values so the fields stay present in the JSON.
   mqtt.publishPacket(*pkt, true, (int)_radio->getLastRSSI(), _radio->getLastSNR());
 #endif
 }
