@@ -123,8 +123,8 @@ fi
 # validate env names exist in the merged project config
 FAILED=0
 for ENV_NAME in "${ENVS[@]}"; do
-  if ! grep -q "\[env:${ENV_NAME}\]" variants/*/platformio.ini; then
-    echo "ERROR: env '$ENV_NAME' not found in variants/*/platformio.ini" >&2
+  if ! grep -q "\[env:${ENV_NAME}\]" observer_meshcoretel.ini variants/*/platformio.ini; then
+    echo "ERROR: env '$ENV_NAME' not found in observer_meshcoretel.ini or variants/" >&2
     FAILED=1
     continue
   fi
