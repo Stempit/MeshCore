@@ -4,15 +4,16 @@ One-time configuration over the serial console (or remotely over the mesh via
 admin CLI, if the node is already in your contact list). Settings persist
 across reboots and firmware updates.
 
-## 1. Connect to the console
+## 1. Connect to the node
 
-Open the board's USB serial port at **115200 baud** (press Enter to see the
-prompt):
+Use the MeshCore companion app: the node advertises on boot and shows up in
+the node list. Open it and log in as repeater admin — a fresh node uses the
+default password `password`; change it right away with `password <new>`.
+Then type the commands below in the repeater console.
 
-```sh
-pio device monitor -b 115200
-# or: screen /dev/ttyUSB0 115200   (Ctrl-A k to quit)
-```
+Serial console (115200 baud) is the fallback when the node doesn't appear in
+the app yet — e.g. when its radio settings don't match your region yet
+(`set freq` / `set bw` / `set sf` / `set cr` are serial-only by design).
 
 ## 2. Configure WiFi, IATA, verify
 
@@ -76,10 +77,10 @@ from other regions' pages.
 
 - **Power**: an observer intentionally does not sleep (WiFi must stay up).
   Nodes with `powersaving_enabled` set stay awake too while the uplink is on.
-- **Remote administration**: once the node knows your admin contact, all
-  these commands also work over the mesh (TXT admin CLI), e.g. `mqtt recover`
-  from home. The one limitation: `get mqtt.status` output is long — read it
-  over serial.
+- **Remote administration**: everything above works over the mesh from the
+  app, e.g. `mqtt recover` from home. One limitation: `get mqtt.status`
+  output is long and can be cut off over the mesh — read it over serial when
+  you need the full line.
 - **Security**: the WiFi password is stored on the device (not readable back
   over CLI); meshcoretel credentials are the public shared ones by broker
   design. Physical access to the node = access to its configuration.
