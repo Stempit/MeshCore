@@ -68,6 +68,7 @@ ALL_ENVS=(
   Heltec_t114_repeater_kvx
   Heltec_t096_repeater_kvx
   LilyGo_T-Echo_repeater_kvx
+  Meshadventurer_sx1262_repeater_kvx
 )
 
 TARGET=""
@@ -294,6 +295,13 @@ build_one() {
   fi
   if [[ -f "$BUILD_DIR/firmware.zip" ]]; then
     cp "$BUILD_DIR/firmware.zip" "$ENV_DEST/${ENV_NAME}-${VVER}-${SHA}.zip"
+  fi
+  # Guard: a build that produces no flashable artifact is a failure, not "done"
+  # (transient post-processing failures would otherwise look like success).
+  if [[ -z "$(ls "$ENV_DEST" 2>/dev/null)" ]]; then
+    echo "$ENV_NAME" >> "$FAIL_LIST"
+    echo ">> BUILD FAILED: $ENV_NAME (no artifacts produced — see $LOG)" >&2
+    return 1
   fi
   echo ">> done: $ENV_NAME"
 }
