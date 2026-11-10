@@ -137,6 +137,8 @@ for ENV_NAME in "${ENVS[@]}"; do
     FAILED=1
     continue
   fi
+  # upstream merge-bin.py exposes the flashable single image as a custom target
+  pio run -e "$ENV_NAME" -t mergebin >/dev/null 2>&1 || echo "WARN: mergebin target failed for $ENV_NAME" >&2
   BUILD_DIR=".pio/build/$ENV_NAME"
   ENV_DEST="$DEST/$ENV_NAME"
   mkdir -p "$ENV_DEST"
