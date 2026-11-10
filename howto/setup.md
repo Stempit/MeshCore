@@ -96,7 +96,7 @@ that was configured before (or if you suspect the seed didn't apply), paste
 this over the serial console or the app's repeater console:
 
 ```
-set radio 868.731 62.5 8 8
+set radio 868.731,62.5,8,8
 set path.hash.mode 1
 set cad on
 set txdelay 2
@@ -120,7 +120,7 @@ Drop the `mqtt.iata` line on vanilla `_kvx` builds. Verify with
 
 ## Notes
 
-- **KVX builds** (`*_kvx`, `*_observer_kvx`) seed regional defaults on the
+- **KVX builds** (`*_kvx`, `*_observer_meshcoretel_kvx`) seed regional defaults on the
   first boot of a never-configured node (radio 868.731/62.5/SF8/CR8,
   path.hash.mode 2, cad, txdelay 2, rxdelay 5, name `KRV_repeater`, regions
   `ru`/`kvx`, iata `KVX`) and reboot automatically. Fresh nodes therefore

@@ -99,7 +99,7 @@ reboot                  # настройки сохраняются
 этот список в serial-консоль или консоль ретранслятора в приложении:
 
 ```
-set radio 868.731 62.5 8 8
+set radio 868.731,62.5,8,8
 set path.hash.mode 1
 set cad on
 set txdelay 2
@@ -123,7 +123,7 @@ reboot
 
 ## Примечания
 
-- **KVX-сборки** (`*_kvx`, `*_observer_kvx`) при первой загрузке
+- **KVX-сборки** (`*_kvx`, `*_observer_meshcoretel_kvx`) при первой загрузке
   ненастроенного узла вносят региональные дефолты (радио 868.731/62.5/SF8/CR8,
   path.hash.mode 2, cad, txdelay 2, rxdelay 5, имя `KRV_repeater`, регионы
   `ru`/`kvx`, iata `KVX`) и сами перезагружаются. Свежий узел сразу

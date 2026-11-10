@@ -45,29 +45,29 @@ ALL_ENVS=(
   Xiao_S3_WIO_observer_meshcoretel
   Meshadventurer_sx1262_observer_meshcoretel
   Generic_E22_sx1262_observer_meshcoretel
-  Heltec_v2_observer_kvx
-  Heltec_v3_observer_kvx
-  Heltec_v4_observer_kvx
-  Heltec_v4_tft_observer_kvx
-  Heltec_Wireless_Paper_observer_kvx
-  Heltec_E213_observer_kvx
-  Heltec_E290_observer_kvx
-  Heltec_T190_observer_kvx
-  LilyGo_TDeck_observer_kvx
-  LilyGo_TLora_V2_1_1_6_observer_kvx
-  Tbeam_SX1262_observer_kvx
-  LilyGo_TBeam_1W_observer_kvx
-  LilyGo_T3S3_sx1262_observer_kvx
-  Xiao_S3_observer_kvx
-  Xiao_S3_WIO_observer_kvx
-  Meshadventurer_sx1262_observer_kvx
-  Generic_E22_sx1262_observer_kvx
-  Heltec_v4_kvx
-  Heltec_v3_kvx
-  ProMicro_kvx
-  Heltec_t114_kvx
-  Heltec_t096_kvx
-  LilyGo_T-Echo_kvx
+  Heltec_v2_observer_meshcoretel_kvx
+  Heltec_v3_observer_meshcoretel_kvx
+  Heltec_v4_observer_meshcoretel_kvx
+  Heltec_v4_tft_observer_meshcoretel_kvx
+  Heltec_Wireless_Paper_observer_meshcoretel_kvx
+  Heltec_E213_observer_meshcoretel_kvx
+  Heltec_E290_observer_meshcoretel_kvx
+  Heltec_T190_observer_meshcoretel_kvx
+  LilyGo_TDeck_observer_meshcoretel_kvx
+  LilyGo_TLora_V2_1_1_6_observer_meshcoretel_kvx
+  Tbeam_SX1262_observer_meshcoretel_kvx
+  LilyGo_TBeam_1W_observer_meshcoretel_kvx
+  LilyGo_T3S3_sx1262_observer_meshcoretel_kvx
+  Xiao_S3_observer_meshcoretel_kvx
+  Xiao_S3_WIO_observer_meshcoretel_kvx
+  Meshadventurer_sx1262_observer_meshcoretel_kvx
+  Generic_E22_sx1262_observer_meshcoretel_kvx
+  Heltec_v4_repeater_kvx
+  Heltec_v3_repeater_kvx
+  ProMicro_repeater_kvx
+  Heltec_t114_repeater_kvx
+  Heltec_t096_repeater_kvx
+  LilyGo_T-Echo_repeater_kvx
 )
 
 TARGET=""
@@ -142,6 +142,9 @@ else
   VERSION="$(git rev-parse --short "$TARGET_SHA")"
 fi
 DEST="$OUT_DIR/$VERSION"
+# Fresh artifact set per run: leftover images from earlier builds of the same
+# version would otherwise accumulate and masquerade as current.
+rm -rf "$DEST"
 mkdir -p "$DEST"
 
 # --- build ----------------------------------------------------------------------
@@ -168,6 +171,40 @@ if [[ "$FAILED" != "0" ]]; then
   exit 1
 fi
 
+# Relocate PlatformIO's HTTP/package cache into the project (gitignored), like
+# the build cache — keeps all caches self-contained. Guarded: one entry only.
+LOCAL_INI="platformio.local.ini"
+if ! grep -Eq '^cache_dir' "$LOCAL_INI" 2>/dev/null; then
+  printf '\n[platformio]\ncache_dir = %s/.pio/cache\n' "$REPO_ROOT" >> "$LOCAL_INI"
+fi
+
+# Local git mirrors: PlatformIO re-clones pinned git deps (RadioLib is ~165MB
+# with history) for every fresh env — over a slow network that dominates the
+# build. One bare mirror per URL + git insteadOf rewriting makes every clone
+# instant and offline-tolerant. Scoped to OUR pio invocations only via
+# GIT_CONFIG_GLOBAL (no machine-global git config changes).
+GIT_MIRROR_DIR="$REPO_ROOT/.pio/git-mirrors"
+mkdir -p "$GIT_MIRROR_DIR"
+GITCONFIG="$GIT_MIRROR_DIR/gitconfig"
+: > "$GITCONFIG"
+GIT_DEPS="$(grep -rhoE 'https://github.com/[^" ]+\.git(#[0-9a-zA-Z.]+)?' platformio.ini variants/*/platformio.ini | grep '#' | sed 's/#.*//' | sort -u)"
+for URL in $GIT_DEPS; do
+  NAME="$(basename "$URL" .git)"
+  MIRROR="$GIT_MIRROR_DIR/$NAME"
+  if [[ -d "$MIRROR" ]]; then
+    perl -e 'alarm shift; exec @ARGV' 120 git -C "$MIRROR" fetch origin >/dev/null 2>&1 \
+      || echo "WARN: mirror refresh failed: $NAME (using existing mirror state)" >&2
+  else
+    echo ">> mirroring git dep: $NAME (ssh)"
+    # SSH first (often faster/more reliable than HTTPS here), HTTPS fallback
+    SSH_URL="git@github.com:${URL#https://github.com/}"
+    perl -e 'alarm shift; exec @ARGV' 900 git clone --mirror "$SSH_URL" "$MIRROR" >/dev/null 2>&1 \
+      || perl -e 'alarm shift; exec @ARGV' 900 git clone --mirror "$URL" "$MIRROR" >/dev/null 2>&1 \
+      || { echo "WARN: mirror clone failed: $NAME (its builds will fetch from the network)" >&2; continue; }
+  fi
+  printf '[url "%s"]\n\tinsteadOf = %s\n' "$MIRROR" "$URL" >> "$GITCONFIG"
+done
+
 # Pre-warm dependency resolution sequentially: when parallel pio processes
 # resolve libdeps on a cold shared cache, each clones git deps (e.g. the
 # pinned RadioLib) itself. Resolving one env at a time populates the shared
@@ -176,7 +213,7 @@ fi
 for ENV_NAME in "${ENVS[@]}"; do
   [[ -d ".pio/libdeps/$ENV_NAME" ]] && continue
   echo ">> pre-warming deps: $ENV_NAME"
-  perl -e 'alarm shift; exec @ARGV' 120 pio pkg install -e "$ENV_NAME" -s >/dev/null 2>&1 \
+  perl -e 'alarm shift; exec @ARGV' 120 env GIT_CONFIG_GLOBAL="$GITCONFIG" pio pkg install -e "$ENV_NAME" -s >/dev/null 2>&1 \
     || echo "WARN: dependency pre-warm skipped for $ENV_NAME (timeout/failure — its build may fetch deps itself)" >&2
 done
 
@@ -190,11 +227,28 @@ JOBS="${BUILD_JOBS:-4}"
 # upstream release only compiles genuinely changed sources. Enabled in the
 # gitignored platformio.local.ini (loaded by upstream extra_configs) so no
 # upstream file changes; skipped if the user configured their own.
+#
+# Shared across all concurrent builds. NOTE: SCons cache races only surface
+# right after a config change (PIO re-resolves libdeps in every process at
+# once) — the sequential retry pass below absorbs those transient failures.
 LOCAL_INI="platformio.local.ini"
-if ! grep -q "build_cache_dir" "$LOCAL_INI" 2>/dev/null; then
-  echo ">> enabling build cache in $LOCAL_INI"
-  printf '\n[platformio]\nbuild_cache_dir = %s/.pio/build_cache\n' "$REPO_ROOT" >> "$LOCAL_INI"
-fi
+# Append managed options under the existing [platformio] section (or create
+# one) — a duplicate section makes configparser reject the whole file.
+ensure_local_option() {
+  local OPTION="$1" VALUE="$2"
+  if grep -Eq "^${OPTION} =" "$LOCAL_INI" 2>/dev/null; then return; fi
+  if grep -q "^\[platformio\]" "$LOCAL_INI" 2>/dev/null; then
+    # insert under the existing section (awk: paths in VALUE contain slashes)
+    awk -v opt="$OPTION" -v val="$VALUE" '
+      !done && /^\[platformio\]$/ { print; print opt " = " val; done = 1; next }
+      { print }
+    ' "$LOCAL_INI" > "$LOCAL_INI.tmp" && mv "$LOCAL_INI.tmp" "$LOCAL_INI"
+  else
+    printf '[platformio]\n%s = %s\n' "$OPTION" "$VALUE" >> "$LOCAL_INI"
+  fi
+}
+ensure_local_option "build_cache_dir" "$REPO_ROOT/.pio/build_cache"
+ensure_local_option "cache_dir" "$REPO_ROOT/.pio/cache"
 
 # Split the CPU budget between concurrent envs (each pio compiles with -j jobs)
 NCPU="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
@@ -212,7 +266,7 @@ build_one() {
   local ENV_NAME="$1"
   local LOG="$LOG_DIR/$ENV_NAME.log"
   echo ">> building $ENV_NAME"
-  if ! pio run -e "$ENV_NAME" -j "$PIO_JOBS" >"$LOG" 2>&1; then
+  if ! GIT_CONFIG_GLOBAL="$GITCONFIG" pio run -e "$ENV_NAME" -j "$PIO_JOBS" </dev/null >"$LOG" 2>&1; then
     echo "$ENV_NAME" >> "$FAIL_LIST"
     echo ">> BUILD FAILED: $ENV_NAME (log: $LOG)" >&2
     return 1
@@ -222,9 +276,9 @@ build_one() {
   # Platform-specific post-processing (both are upstream custom targets):
   # ESP32 -> merged flashable image; nRF52 -> uf2 (drag-and-drop flashing).
   if [[ -f "$BUILD_DIR/bootloader.bin" ]]; then
-    pio run -e "$ENV_NAME" -t mergebin >>"$LOG" 2>&1 || echo "WARN: mergebin failed for $ENV_NAME" >&2
+    GIT_CONFIG_GLOBAL="$GITCONFIG" pio run -e "$ENV_NAME" -t mergebin </dev/null >>"$LOG" 2>&1 || echo "WARN: mergebin failed for $ENV_NAME" >&2
   else
-    pio run -e "$ENV_NAME" -t create_uf2 >>"$LOG" 2>&1 || echo "WARN: create_uf2 failed for $ENV_NAME" >&2
+    GIT_CONFIG_GLOBAL="$GITCONFIG" pio run -e "$ENV_NAME" -t create_uf2 </dev/null >>"$LOG" 2>&1 || echo "WARN: create_uf2 failed for $ENV_NAME" >&2
   fi
   # Release asset names follow the upstream convention
   # (<EnvName>-v<version>-<shortSHA>-merged.bin|.bin|.uf2|.zip); only
@@ -251,6 +305,19 @@ for ENV_NAME in "${ENVS[@]}"; do
   build_one "$ENV_NAME" &
 done
 wait
+
+# Sequential retry pass for stragglers (transient cache races / network
+# blips): each retry gets its own cache slice, avoiding the parallel races.
+if [[ -s "$FAIL_LIST" ]]; then
+  echo ">> retrying $(wc -l < "$FAIL_LIST" | tr -d ' ') failed env(s) sequentially"
+  RETRY_LIST="$LOG_DIR/retry.txt"
+  cp "$FAIL_LIST" "$RETRY_LIST"
+  : > "$FAIL_LIST"
+  while read -r ENV_NAME; do
+    [[ -z "$ENV_NAME" ]] && continue
+    build_one "$ENV_NAME" || true
+  done < "$RETRY_LIST"
+fi
 
 echo ""
 if [[ -s "$FAIL_LIST" ]]; then

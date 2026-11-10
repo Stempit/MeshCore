@@ -60,8 +60,8 @@ stored settings (see [build-update.md](build-update.md)).
 
 Add the new env name to `ALL_ENVS` in `scripts/build-observer_meshcoretel.sh`
 so release builds include it. For the KVX families, also append an env to
-`observer_meshcoretel_kvx.ini` (extends your `_observer_meshcoretel` env) or
-`repeater_kvx.ini` (extends the upstream repeater env), each adding only:
+`observer_meshcoretel_repeater_kvx.ini` (extends your `_observer_meshcoretel` env) or
+`repeater_repeater_kvx.ini` (extends the upstream repeater env), each adding only:
 
 ```ini
 build_flags = ${env:<parent>.build_flags} -D WITH_KVX_DEFAULTS=1

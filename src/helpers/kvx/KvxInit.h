@@ -20,7 +20,7 @@ constexpr size_t kMaxCmdLen = 64;  // longest seed command is well under this
 constexpr size_t kReplyLen = 160;  // replies are short "OK ..." strings
 
 constexpr const char* kPrefsSeed[] = {
-    "set radio 868.731 62.5 8 8",   // freq/bw/sf/cr; needs reboot to apply
+    "set radio 868.731,62.5,8,8",   // freq/bw/sf/cr; COMMA-separated (parseTextParts default separator is comma); needs reboot to apply
     "set path.hash.mode 1",         // 2-byte path hashes on air (TX uses mode+1)
     "set cad on",
     "set txdelay 2",

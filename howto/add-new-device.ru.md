@@ -61,8 +61,8 @@ board_build.partitions = min_spiffs.csv
 
 Добавьте имя нового окружения в `ALL_ENVS` в
 `scripts/build-observer_meshcoretel.sh`, чтобы релизные сборки его включали.
-Для семейств KVX добавьте окружение также в `observer_meshcoretel_kvx.ini`
-(наследует ваше `_observer_meshcoretel`) или `repeater_kvx.ini` (наследует
+Для семейств KVX добавьте окружение также в `observer_meshcoretel_repeater_kvx.ini`
+(наследует ваше `_observer_meshcoretel`) или `repeater_repeater_kvx.ini` (наследует
 upstream repeater-окружение), дописав только:
 
 ```ini
