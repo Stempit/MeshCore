@@ -35,10 +35,6 @@
 #include <helpers/TxtDataHelpers.h>
 #include <helpers/RegionMap.h>
 #include <helpers/RoutingPolicy.h>
-#if defined(WITH_MQTT_UPLINK)
-  #include <helpers/mqtt/MQTTUplink.h>
-  #include <helpers/mqtt/WifiLink.h>
-#endif
 #include "RateLimiter.h"
 
 #ifdef WITH_BRIDGE
@@ -118,10 +114,6 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   RS232Bridge bridge;
 #elif defined(WITH_ESPNOW_BRIDGE)
   ESPNowBridge bridge;
-#endif
-#if defined(WITH_MQTT_UPLINK)
-  WifiLink wifi_link;
-  MQTTUplink mqtt;
 #endif
 
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);
@@ -234,7 +226,9 @@ public:
   void saveIdentity(const mesh::LocalIdentity& new_id) override;
   void clearStats() override;
 
-  void handleCommand(uint32_t sender_timestamp, char* command, char* reply);
+  // virtual so the ObserverMesh subclass (WITH_MQTT_UPLINK builds) can
+  // intercept wifi./mqtt. commands on both the serial and mesh CLI paths
+  virtual void handleCommand(uint32_t sender_timestamp, char* command, char* reply);
   void loop();
 
 #if defined(WITH_BRIDGE)

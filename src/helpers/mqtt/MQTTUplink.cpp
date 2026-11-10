@@ -1,5 +1,6 @@
 #include "MQTTUplink.h"
 #include "MQTTCaCerts.h"
+#include "WifiLink.h"
 
 #ifdef WITH_MQTT_UPLINK
 
@@ -1045,6 +1046,128 @@ void MQTTUplink::formatStatusReply(char* reply, size_t reply_size) const {
            static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMaxAllocHeap()));
 }
 
+bool MQTTUplink::handleCliCommand(WifiLink& wifi, const char* command, char* reply) {
+  if (memcmp(command, "get wifi.status", 15) == 0) {
+    wifi.formatWifiStatusReply(reply, 160);
+  } else if (memcmp(command, "get wifi.ssid", 13) == 0) {
+    sprintf(reply, "> %s", wifi.getWifiSSID()[0] ? wifi.getWifiSSID() : "-");
+  } else if (memcmp(command, "get wifi.powersaving", 20) == 0) {
+    sprintf(reply, "> %s", wifi.getWifiPowerSave());
+  } else if (memcmp(command, "set wifi.ssid ", 14) == 0) {
+    if (wifi.setWifiSSID(&command[14])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad wifi.ssid");
+    }
+  } else if (memcmp(command, "set wifi.pwd ", 13) == 0) {
+    if (wifi.setWifiPassword(&command[13])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad wifi.pwd");
+    }
+  } else if (memcmp(command, "set wifi.powersaving ", 21) == 0) {
+    if (wifi.setWifiPowerSave(&command[21])) {
+      savePrefs();
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - use none|min|max");
+    }
+  } else if (strcmp(command, "mqtt recover") == 0) {
+    requestReconnect();
+    wifi.reconnectWifi();
+    strcpy(reply, "OK - Wi-Fi reset requested");
+  } else if (strcmp(command, "get mqtt.status") == 0) {
+    formatStatusReply(reply, 240);
+  } else if (strcmp(command, "get mqtt.statuscfg") == 0) {
+    sprintf(reply, "> %s", isStatusEnabled() ? "on" : "off");
+  } else if (strcmp(command, "send mqtt.status") == 0) {
+    if (sendStatusNow()) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - mqtt status unavailable");
+    }
+  } else if (strcmp(command, "get mqtt.client_version") == 0) {
+    sprintf(reply, "> %s", getClientVersion());
+  } else if (memcmp(command, "get mqtt.iata", 13) == 0) {
+    sprintf(reply, "> %s", getIata());
+  } else if (memcmp(command, "get mqtt.owner", 14) == 0) {
+    sprintf(reply, "> %s", getOwnerPublicKey()[0] ? getOwnerPublicKey() : "-");
+  } else if (memcmp(command, "get mqtt.email", 14) == 0) {
+    sprintf(reply, "> %s", getOwnerEmail()[0] ? getOwnerEmail() : "-");
+  } else if (memcmp(command, "get mqtt.packets", 16) == 0) {
+    sprintf(reply, "> %s", isPacketsEnabled() ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.raw", 12) == 0) {
+    sprintf(reply, "> %s", isRawEnabled() ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.tx", 11) == 0) {
+    sprintf(reply, "> %s", getTxMode() == 0 ? "off" : (getTxMode() == 1 ? "on" : "advert"));
+  } else if (memcmp(command, "get mqtt.meshcoretel", 20) == 0) {
+    sprintf(reply, "> %s", isEndpointEnabled(0x01) ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.letsmesh-eu", 20) == 0 || memcmp(command, "get mqtt.letsmesh.eu", 20) == 0) {
+    sprintf(reply, "> %s", isEndpointEnabled(0x02) ? "on" : "off");
+  } else if (memcmp(command, "get mqtt.letsmesh-us", 20) == 0 || memcmp(command, "get mqtt.letsmesh.us", 20) == 0) {
+    sprintf(reply, "> %s", isEndpointEnabled(0x04) ? "on" : "off");
+  } else if (memcmp(command, "set mqtt.iata ", 14) == 0) {
+    if (setIata(&command[14])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad mqtt.iata");
+    }
+  } else if (memcmp(command, "set mqtt.owner ", 15) == 0) {
+    if (setOwnerPublicKey(&command[15])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - owner must be 64 hex chars");
+    }
+  } else if (memcmp(command, "set mqtt.email ", 15) == 0) {
+    if (setOwnerEmail(&command[15])) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - bad mqtt.email");
+    }
+  } else if (memcmp(command, "set mqtt.packets ", 17) == 0) {
+    setPacketsEnabled(memcmp(&command[17], "on", 2) == 0);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.raw ", 13) == 0) {
+    setRawEnabled(memcmp(&command[13], "on", 2) == 0);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.status ", 16) == 0) {
+    setStatusEnabled(memcmp(&command[16], "on", 2) == 0);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.tx ", 12) == 0) {
+    uint8_t mode;
+    if (memcmp(&command[12], "on", 2) == 0) {
+      mode = 1;
+    } else if (memcmp(&command[12], "advert", 6) == 0) {
+      mode = 2;
+    } else {
+      mode = 0;
+    }
+    setTxMode(mode);
+    strcpy(reply, "OK");
+  } else if (memcmp(command, "set mqtt.meshcoretel ", 21) == 0) {
+    if (setEndpointEnabled(0x01, memcmp(&command[21], "on", 2) == 0)) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - max 2 mqtt brokers");
+    }
+  } else if (memcmp(command, "set mqtt.letsmesh-eu ", 21) == 0 || memcmp(command, "set mqtt.letsmesh.eu ", 21) == 0) {
+    if (setEndpointEnabled(0x02, memcmp(&command[21], "on", 2) == 0)) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - max 2 mqtt brokers");
+    }
+  } else if (memcmp(command, "set mqtt.letsmesh-us ", 21) == 0 || memcmp(command, "set mqtt.letsmesh.us ", 21) == 0) {
+    if (setEndpointEnabled(0x04, memcmp(&command[21], "on", 2) == 0)) {
+      strcpy(reply, "OK");
+    } else {
+      strcpy(reply, "Err - max 2 mqtt brokers");
+    }
+  } else {
+    return false;  // not an observer command; caller falls through to the common CLI
+  }
+  return true;
+}
+
 bool MQTTUplink::setEndpointEnabled(uint8_t bit, bool enabled) {
   uint8_t next_mask = _prefs.enabled_mask & 0x07;
   if (enabled) {
@@ -1199,6 +1322,7 @@ void MQTTUplink::end() {}
 void MQTTUplink::loop(const MQTTStatusSnapshot&) {}
 void MQTTUplink::publishPacket(const mesh::Packet&, bool, int, float, int, int) {}
 void MQTTUplink::formatStatusReply(char* reply, size_t reply_size) const { snprintf(reply, reply_size, "> unsupported"); }
+bool MQTTUplink::handleCliCommand(WifiLink&, const char*, char*) { return false; }
 bool MQTTUplink::setEndpointEnabled(uint8_t, bool) { return false; }
 bool MQTTUplink::isEndpointEnabled(uint8_t) const { return false; }
 bool MQTTUplink::setPacketsEnabled(bool) { return false; }

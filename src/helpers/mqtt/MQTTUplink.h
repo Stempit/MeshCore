@@ -9,6 +9,8 @@
 #include "JWTHelper.h"
 #include "MQTTPrefs.h"
 
+class WifiLink;
+
 #if defined(ESP_PLATFORM)
 #include <mqtt_client.h>
 #endif
@@ -42,6 +44,9 @@ public:
   bool isActive() const;
 
   void formatStatusReply(char* reply, size_t reply_size) const;
+  // Observer CLI: handles the wifi.* / mqtt.* commands, returns false (reply
+  // untouched) when the command is not one of ours.
+  bool handleCliCommand(WifiLink& wifi, const char* command, char* reply);
 
   bool setEndpointEnabled(uint8_t bit, bool enabled);
   bool isEndpointEnabled(uint8_t bit) const;

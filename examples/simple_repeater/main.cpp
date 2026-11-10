@@ -1,7 +1,11 @@
 #include <Arduino.h>   // needed for PlatformIO
 #include <Mesh.h>
 
-#include "MyMesh.h"
+#ifdef WITH_MQTT_UPLINK
+  #include "ObserverMesh.h"  // observer flavour: repeater + meshcoretel MQTT uplink
+#else
+  #include "MyMesh.h"
+#endif
 
 #ifdef DISPLAY_CLASS
   #include "UITask.h"
@@ -16,7 +20,11 @@
 StdRNG fast_rng;
 SimpleMeshTables tables;
 
+#ifdef WITH_MQTT_UPLINK
+ObserverMesh the_mesh(board, radio_driver, *new ArduinoMillis(), fast_rng, rtc_clock, tables);
+#else
 MyMesh the_mesh(board, radio_driver, *new ArduinoMillis(), fast_rng, rtc_clock, tables);
+#endif
 
 void halt() {
   while (1) ;
