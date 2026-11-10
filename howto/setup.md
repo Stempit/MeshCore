@@ -89,6 +89,35 @@ Radio settings must match the regional settings of your mesh — follow the
 meshcoretel.ru guidance for the region (KVX); do not copy radio parameters
 from other regions' pages.
 
+## Applying KVX defaults manually (already-configured nodes)
+
+The first-boot seed only runs on a node with no saved settings. For a node
+that was configured before (or if you suspect the seed didn't apply), paste
+this over the serial console or the app's repeater console:
+
+```
+set radio 868.731 62.5 8 8
+set path.hash.mode 1
+set cad on
+set txdelay 2
+set rxdelay 5
+set loop.detect minimal
+set tx 22
+set advert.interval 240
+set flood.advert.interval 24
+set name KRV_repeater
+set mqtt.iata KVX
+region put ru
+region put kvx ru
+region allowf *
+region save
+reboot
+```
+
+(`set radio` replies "OK - reboot to apply"; the final `reboot` applies it.
+Drop the `mqtt.iata` line on vanilla `_kvx` builds. Verify with
+`get radio`, `get freq`, `get name` and `region list`.)
+
 ## Notes
 
 - **KVX builds** (`*_kvx`, `*_observer_kvx`) seed regional defaults on the

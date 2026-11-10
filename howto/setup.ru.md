@@ -92,6 +92,35 @@ reboot                  # настройки сохраняются
 следуйте рекомендациям meshcoretel.ru для региона (KVX); не копируйте
 радиопараметры со страниц других регионов.
 
+## Ручное применение KVX-дефолтов (уже настроенные узлы)
+
+Автозасев выполняется только на узле без сохранённых настроек. Если узел
+настраивался раньше (или есть подозрение, что засев не применился), вставьте
+этот список в serial-консоль или консоль ретранслятора в приложении:
+
+```
+set radio 868.731 62.5 8 8
+set path.hash.mode 1
+set cad on
+set txdelay 2
+set rxdelay 5
+set loop.detect minimal
+set tx 22
+set advert.interval 240
+set flood.advert.interval 24
+set name KRV_repeater
+set mqtt.iata KVX
+region put ru
+region put kvx ru
+region allowf *
+region save
+reboot
+```
+
+(`set radio` отвечает "OK - reboot to apply"; финальный `reboot` применяет
+радиопараметры. Строку `mqtt.iata` опустите на ванильных сборках `_kvx`.
+Проверка: `get radio`, `get freq`, `get name`, `region list`.)
+
 ## Примечания
 
 - **KVX-сборки** (`*_kvx`, `*_observer_kvx`) при первой загрузке

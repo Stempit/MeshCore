@@ -21,11 +21,14 @@ constexpr size_t kReplyLen = 160;  // replies are short "OK ..." strings
 
 constexpr const char* kPrefsSeed[] = {
     "set radio 868.731 62.5 8 8",   // freq/bw/sf/cr; needs reboot to apply
-    "set path.hash.mode 2",
+    "set path.hash.mode 1",         // 2-byte path hashes on air (TX uses mode+1)
     "set cad on",
     "set txdelay 2",
     "set rxdelay 5",
     "set loop.detect minimal",
+    "set tx 22",
+    "set advert.interval 240",
+    "set flood.advert.interval 24",
     "set name KRV_repeater",
 #ifdef WITH_MQTT_UPLINK
     "set mqtt.iata KVX",
@@ -48,6 +51,7 @@ void replay(MeshT& mesh, const char* const commands[], size_t count) {
     cmd[sizeof(cmd) - 1] = 0;
     reply[0] = 0;
     mesh.handleCommand(0, cmd, reply);
+    Serial.printf("[kvx] %s -> %s\n", commands[i], reply[0] ? reply : "(no reply)");
   }
 }
 
@@ -58,6 +62,8 @@ void applyIfFresh(FILESYSTEM* fs, MeshT& mesh) {
   // files, no regions file) gets the KVX defaults.
   bool prefs_fresh = !fs->exists("/prefs.json") && !fs->exists("/com_prefs");
   bool regions_fresh = !fs->exists("/regions2");
+  Serial.printf("[kvx] seed check: prefs %s, regions %s\n", prefs_fresh ? "FRESH (will seed)" : "kept (existing config)",
+                regions_fresh ? "FRESH (will seed)" : "kept (existing config)");
 
   if (prefs_fresh) {
     replay(mesh, kPrefsSeed, sizeof(kPrefsSeed) / sizeof(kPrefsSeed[0]));

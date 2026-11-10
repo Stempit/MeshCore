@@ -3,7 +3,7 @@
 // Mod release version — bump on every mod release. The MQTT client identity
 // ("observer_meshcoretel_<ver>") and the status firmware string
 // ("v1.18.0" + segment + version) are derived from this.
-#define MESHCORETEL_MOD_VERSION "v0.1.0"
+#define MESHCORETEL_MOD_VERSION "v0.1.1"
 
 // Firmware-string segment; the kvx flavour is selected here at compile time.
 #ifdef WITH_KVX_DEFAULTS
