@@ -91,6 +91,15 @@ from other regions' pages.
 
 ## Notes
 
+- **KVX builds** (`*_kvx`, `*_observer_kvx`) seed regional defaults on the
+  first boot of a never-configured node (radio 868.731/62.5/SF8/CR8,
+  path.hash.mode 2, cad, txdelay 2, rxdelay 5, name `KRV_repeater`, regions
+  `ru`/`kvx`, iata `KVX`) and reboot automatically. Fresh nodes therefore
+  start pre-configured — usually only the WiFi credentials are needed. All
+  fresh nodes share the name `KRV_repeater`: rename each node with
+  `set name <unique-name>`. Seeding never runs again once settings have been
+  saved.
+
 - **Power**: an observer intentionally does not sleep (WiFi must stay up).
   Nodes with `powersaving_enabled` set stay awake too while the uplink is on.
 - **Remote administration**: everything above works over the mesh from the

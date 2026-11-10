@@ -7,6 +7,10 @@
   #include "MyMesh.h"
 #endif
 
+#ifdef WITH_KVX_DEFAULTS
+  #include <helpers/kvx/KvxInit.h>  // first-boot KVX regional defaults
+#endif
+
 #ifdef DISPLAY_CLASS
   #include "UITask.h"
   static UITask ui_task(board, display);
@@ -113,6 +117,10 @@ void setup() {
   sensors.begin();
 
   the_mesh.begin(fs);
+
+#ifdef WITH_KVX_DEFAULTS
+  kvx::applyIfFresh(fs, the_mesh);  // first boot: seed KVX defaults (reboots if it seeded)
+#endif
 
 #ifdef DISPLAY_CLASS
   ui_task.begin(the_mesh.getNodePrefs(), FIRMWARE_BUILD_DATE, FIRMWARE_VERSION);

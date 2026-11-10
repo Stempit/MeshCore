@@ -45,6 +45,29 @@ ALL_ENVS=(
   Xiao_S3_WIO_observer_meshcoretel
   Meshadventurer_sx1262_observer_meshcoretel
   Generic_E22_sx1262_observer_meshcoretel
+  Heltec_v2_observer_kvx
+  Heltec_v3_observer_kvx
+  Heltec_v4_observer_kvx
+  Heltec_v4_tft_observer_kvx
+  Heltec_Wireless_Paper_observer_kvx
+  Heltec_E213_observer_kvx
+  Heltec_E290_observer_kvx
+  Heltec_T190_observer_kvx
+  LilyGo_TDeck_observer_kvx
+  LilyGo_TLora_V2_1_1_6_observer_kvx
+  Tbeam_SX1262_observer_kvx
+  LilyGo_TBeam_1W_observer_kvx
+  LilyGo_T3S3_sx1262_observer_kvx
+  Xiao_S3_observer_kvx
+  Xiao_S3_WIO_observer_kvx
+  Meshadventurer_sx1262_observer_kvx
+  Generic_E22_sx1262_observer_kvx
+  Heltec_v4_kvx
+  Heltec_v3_kvx
+  ProMicro_kvx
+  Heltec_t114_kvx
+  Heltec_t096_kvx
+  LilyGo_T-Echo_kvx
 )
 
 TARGET=""
@@ -135,8 +158,8 @@ fi
 # validate env names exist in the merged project config
 FAILED=0
 for ENV_NAME in "${ENVS[@]}"; do
-  if ! grep -q "\[env:${ENV_NAME}\]" observer_meshcoretel.ini variants/*/platformio.ini; then
-    echo "ERROR: env '$ENV_NAME' not found in observer_meshcoretel.ini or variants/" >&2
+  if ! grep -q "\[env:${ENV_NAME}\]" observer_meshcoretel.ini observer_meshcoretel_kvx.ini repeater_kvx.ini variants/*/platformio.ini; then
+    echo "ERROR: env '$ENV_NAME' not found in the project ini files" >&2
     FAILED=1
     continue
   fi
