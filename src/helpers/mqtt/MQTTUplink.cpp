@@ -100,10 +100,8 @@ MQTTUplink::MQTTUplink(mesh::RTCClock&, mesh::LocalIdentity& identity)
     : _fs(nullptr), _identity(&identity), _running(false), _last_status_publish(0), _last_status{},
       _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _board_model(nullptr), _network(nullptr), _queue{}, _queue_len(0),
       _event_retry_at(0), _no_broker_since(0), _stat_rx(0), _stat_pub(0), _stat_drop(0), _brokers{} {
-  memset(_device_id, 0, sizeof(_device_id));
   MQTTPrefsStore::setDefaults(_prefs);
   for (size_t i = 0; i < 3; ++i) {
-    memset(&_brokers[i], 0, sizeof(_brokers[i]));
     _brokers[i].spec = &kBrokerSpecs[i];
   }
   MQTT_LOG("uplink init");
@@ -145,6 +143,16 @@ void MQTTUplink::formatTopic(char* dst, size_t dst_size, const char* leaf) const
     return;
   }
   snprintf(dst, dst_size, "meshcore/%s/%s/%s", _prefs.iata, _device_id, leaf);
+}
+
+void MQTTUplink::formatOrigin(char* origin, size_t origin_size) const {
+  const char* node_name = (_node_name != nullptr && _node_name[0] != 0) ? _node_name : _device_id;
+  escapeJsonString(node_name, origin, origin_size);
+}
+
+void MQTTUplink::formatRadioInfo(char* dst, size_t dst_size) const {
+  snprintf(dst, dst_size, "%.6f,%.1f,%u,%u", static_cast<double>(_last_status.radio_freq),
+           static_cast<double>(_last_status.radio_bw), _last_status.radio_sf, _last_status.radio_cr);
 }
 
 bool MQTTUplink::isActive() const {
@@ -271,13 +279,9 @@ void MQTTUplink::refreshBrokerState(BrokerState& broker) {
   char model[48];
   escapeJsonString(_board_model != nullptr ? _board_model : "unknown", model, sizeof(model));
   char origin[80];
-  const char* node_name = (_node_name != nullptr && _node_name[0] != 0) ? _node_name : _device_id;
-  escapeJsonString(node_name, origin, sizeof(origin));
-  char client_version[96];
-  snprintf(client_version, sizeof(client_version), "%s", CLIENT_VERSION);
+  formatOrigin(origin, sizeof(origin));
   char radio_info[48];
-  snprintf(radio_info, sizeof(radio_info), "%.6f,%.1f,%u,%u", static_cast<double>(_last_status.radio_freq),
-           static_cast<double>(_last_status.radio_bw), _last_status.radio_sf, _last_status.radio_cr);
+  formatRadioInfo(radio_info, sizeof(radio_info));
 
   char ts[32];
   formatIsoTimestamp(time(nullptr), ts, sizeof(ts));
@@ -285,7 +289,7 @@ void MQTTUplink::refreshBrokerState(BrokerState& broker) {
            "{\"status\":\"offline\",\"timestamp\":\"%s\",\"origin\":\"%s\",\"origin_id\":\"%s\",\"model\":\"%s\","
            "\"firmware_version\":\"%s\",\"radio\":\"%s\",\"client_version\":\"%s\",\"repeat\":true}",
            ts, origin, _device_id, model, _firmware_version != nullptr ? _firmware_version : "unknown", radio_info,
-           client_version);
+           CLIENT_VERSION);
 }
 
 bool MQTTUplink::refreshToken(BrokerState& broker) {
@@ -319,12 +323,14 @@ bool MQTTUplink::refreshToken(BrokerState& broker) {
   return true;
 }
 
+bool MQTTUplink::hasRuntimeState(const BrokerState& broker) {
+  return broker.client != nullptr || broker.token != nullptr || broker.connected || broker.connect_announced ||
+         broker.reconnect_pending || broker.next_connect_attempt != 0 || broker.last_connect_attempt != 0 ||
+         broker.reconnect_failures != 0 || broker.token_expires_at != 0;
+}
+
 void MQTTUplink::destroyBroker(BrokerState& broker, bool reset_retry_state) {
-  bool had_runtime_state = broker.client != nullptr || broker.token != nullptr || broker.connected ||
-                           broker.connect_announced || broker.reconnect_pending || broker.next_connect_attempt != 0 ||
-                           broker.last_connect_attempt != 0 || broker.reconnect_failures != 0 ||
-                           broker.token_expires_at != 0;
-  if (!had_runtime_state) {
+  if (!hasRuntimeState(broker)) {
     return;
   }
   logMqttMemorySnapshot("destroy-pre", broker.spec != nullptr ? broker.spec->label : nullptr);
@@ -399,6 +405,12 @@ bool MQTTUplink::publishToConnected(const char* topic, const char* payload, bool
   return any_ok;
 }
 
+void MQTTUplink::popFrontEvent() {
+  freeScratchBuffer(_queue[0].payload);
+  memmove(&_queue[0], &_queue[1], sizeof(QueuedEvent) * (_queue_len - 1));
+  _queue_len--;
+}
+
 void MQTTUplink::drainQueue(unsigned long now_ms) {
   if (_queue_len == 0) {
     return;
@@ -420,18 +432,14 @@ void MQTTUplink::drainQueue(unsigned long now_ms) {
   QueuedEvent& ev = _queue[0];
   if (publishToConnected(topic, ev.payload, false)) {
     _stat_pub++;
-    freeScratchBuffer(ev.payload);
-    memmove(&_queue[0], &_queue[1], sizeof(QueuedEvent) * (_queue_len - 1));
-    _queue_len--;
+    popFrontEvent();
     _event_retry_at = now_ms;
     return;
   }
   ev.attempts++;
   if (ev.attempts >= kQueueMaxAttempts) {
     _stat_drop++;
-    freeScratchBuffer(ev.payload);
-    memmove(&_queue[0], &_queue[1], sizeof(QueuedEvent) * (_queue_len - 1));
-    _queue_len--;
+    popFrontEvent();
     _event_retry_at = now_ms + 100;
   } else {
     _event_retry_at = now_ms + 300 + (esp_random() % 200);
@@ -457,13 +465,9 @@ int MQTTUplink::buildStatusJson(char* buffer, size_t buffer_size, bool online) c
   char model[48];
   escapeJsonString(_board_model != nullptr ? _board_model : "unknown", model, sizeof(model));
   char origin[80];
-  const char* node_name = (_node_name != nullptr && _node_name[0] != 0) ? _node_name : _device_id;
-  escapeJsonString(node_name, origin, sizeof(origin));
-  char client_version[96];
-  snprintf(client_version, sizeof(client_version), "%s", CLIENT_VERSION);
+  formatOrigin(origin, sizeof(origin));
   char radio_info[48];
-  snprintf(radio_info, sizeof(radio_info), "%.6f,%.1f,%u,%u", static_cast<double>(_last_status.radio_freq),
-           static_cast<double>(_last_status.radio_bw), _last_status.radio_sf, _last_status.radio_cr);
+  formatRadioInfo(radio_info, sizeof(radio_info));
   return snprintf(buffer, buffer_size,
                   "{\"status\":\"%s\",\"timestamp\":\"%s\",\"origin\":\"%s\",\"origin_id\":\"%s\","
                   "\"model\":\"%s\",\"firmware_version\":\"%s\",\"radio\":\"%s\",\"client_version\":\"%s\","
@@ -471,7 +475,7 @@ int MQTTUplink::buildStatusJson(char* buffer, size_t buffer_size, bool online) c
                   "\"stats\":{\"battery_mv\":%d,\"uptime_secs\":%lu,\"errors\":%u,\"queue_len\":%u,"
                   "\"noise_floor\":%d,\"tx_air_secs\":%lu,\"rx_air_secs\":%lu,\"recv_errors\":%lu}}",
                   online ? "online" : "offline", ts, origin, _device_id, model,
-                  _firmware_version != nullptr ? _firmware_version : "unknown", radio_info, client_version,
+                  _firmware_version != nullptr ? _firmware_version : "unknown", radio_info, CLIENT_VERSION,
                   _last_status.battery_mv, static_cast<unsigned long>(_last_status.uptime_secs),
                   _last_status.error_flags, _last_status.queue_len, _last_status.noise_floor,
                   static_cast<unsigned long>(_last_status.tx_air_secs),
@@ -504,62 +508,34 @@ int MQTTUplink::buildPacketJson(char* buffer, size_t buffer_size, const mesh::Pa
   strftime(time_only, sizeof(time_only), "%H:%M:%S", &tm_utc);
   strftime(date_only, sizeof(date_only), "%d/%m/%Y", &tm_utc);
   char origin[80];
-  const char* node_name = (_node_name != nullptr && _node_name[0] != 0) ? _node_name : _device_id;
-  escapeJsonString(node_name, origin, sizeof(origin));
-  if (packet.isRouteDirect() && packet.path_len > 0) {
-    char path_info[128];
-    snprintf(path_info, sizeof(path_info), "path_%dx%d_%db", (int)packet.getPathHashCount(),
+  formatOrigin(origin, sizeof(origin));
+
+  bool has_path = packet.isRouteDirect() && packet.path_len > 0;
+  const char* route = has_path ? "D" : "F";
+  char path_seg[128] = "";
+  if (has_path) {
+    snprintf(path_seg, sizeof(path_seg), ",\"path\":\"path_%dx%d_%db\"", (int)packet.getPathHashCount(),
              (int)packet.getPathHashSize(), (int)packet.getPathByteLen());
-    int len;
-    if (score >= 0) {
-      len = snprintf(buffer, buffer_size,
-                     "{\"origin\":\"%s\",\"origin_id\":\"%s\",\"timestamp\":\"%s\",\"type\":\"PACKET\","
-                     "\"direction\":\"%s\",\"time\":\"%s\",\"date\":\"%s\",\"len\":\"%d\",\"packet_type\":\"%u\","
-                     "\"route\":\"D\",\"payload_len\":\"%u\",\"raw\":\"%s\",\"SNR\":\"%.1f\",\"RSSI\":\"%d\","
-                     "\"score\":\"%d\",\"duration\":\"%d\",\"hash\":\"%s\",\"path\":\"%s\"}",
-                     origin, _device_id, ts, is_tx ? "tx" : "rx", time_only, date_only, raw_len,
-                     packet.getPayloadType(), packet.payload_len, raw_hex, snr, rssi, score, duration, hash_hex,
-                     path_info);
-    } else {
-      len = snprintf(buffer, buffer_size,
-                     "{\"origin\":\"%s\",\"origin_id\":\"%s\",\"timestamp\":\"%s\",\"type\":\"PACKET\","
-                     "\"direction\":\"%s\",\"time\":\"%s\",\"date\":\"%s\",\"len\":\"%d\",\"packet_type\":\"%u\","
-                     "\"route\":\"D\",\"payload_len\":\"%u\",\"raw\":\"%s\",\"SNR\":\"%.1f\",\"RSSI\":\"%d\","
-                     "\"hash\":\"%s\",\"path\":\"%s\"}",
-                     origin, _device_id, ts, is_tx ? "tx" : "rx", time_only, date_only, raw_len,
-                     packet.getPayloadType(), packet.payload_len, raw_hex, snr, rssi, hash_hex, path_info);
-    }
-    freeScratchBuffer(raw_hex);
-    return len;
+  }
+  // Score/duration are only reported when the caller measured them.
+  char score_seg[48] = "";
+  if (score >= 0) {
+    snprintf(score_seg, sizeof(score_seg), "\"score\":\"%d\",\"duration\":\"%d\",", score, duration);
   }
 
-  int len;
-  if (score >= 0) {
-    len = snprintf(buffer, buffer_size,
-                   "{\"origin\":\"%s\",\"origin_id\":\"%s\",\"timestamp\":\"%s\",\"type\":\"PACKET\","
-                   "\"direction\":\"%s\",\"time\":\"%s\",\"date\":\"%s\",\"len\":\"%d\",\"packet_type\":\"%u\","
-                   "\"route\":\"F\",\"payload_len\":\"%u\",\"raw\":\"%s\",\"SNR\":\"%.1f\",\"RSSI\":\"%d\","
-                   "\"score\":\"%d\",\"duration\":\"%d\",\"hash\":\"%s\"}",
-                   origin, _device_id, ts, is_tx ? "tx" : "rx", time_only, date_only, raw_len,
-                   packet.getPayloadType(), packet.payload_len, raw_hex, snr, rssi, score, duration, hash_hex);
-  } else {
-    len = snprintf(buffer, buffer_size,
-                   "{\"origin\":\"%s\",\"origin_id\":\"%s\",\"timestamp\":\"%s\",\"type\":\"PACKET\","
-                   "\"direction\":\"%s\",\"time\":\"%s\",\"date\":\"%s\",\"len\":\"%d\",\"packet_type\":\"%u\","
-                   "\"route\":\"F\",\"payload_len\":\"%u\",\"raw\":\"%s\",\"SNR\":\"%.1f\",\"RSSI\":\"%d\","
-                   "\"hash\":\"%s\"}",
-                   origin, _device_id, ts, is_tx ? "tx" : "rx", time_only, date_only, raw_len,
-                   packet.getPayloadType(), packet.payload_len, raw_hex, snr, rssi, hash_hex);
-  }
+  int len = snprintf(buffer, buffer_size,
+                     "{\"origin\":\"%s\",\"origin_id\":\"%s\",\"timestamp\":\"%s\",\"type\":\"PACKET\","
+                     "\"direction\":\"%s\",\"time\":\"%s\",\"date\":\"%s\",\"len\":\"%d\",\"packet_type\":\"%u\","
+                     "\"route\":\"%s\",\"payload_len\":\"%u\",\"raw\":\"%s\",\"SNR\":\"%.1f\",\"RSSI\":\"%d\","
+                     "%s\"hash\":\"%s\"%s}",
+                     origin, _device_id, ts, is_tx ? "tx" : "rx", time_only, date_only, raw_len,
+                     packet.getPayloadType(), route, packet.payload_len, raw_hex, snr, rssi, score_seg, hash_hex,
+                     path_seg);
   freeScratchBuffer(raw_hex);
   return len;
 }
 
-int MQTTUplink::buildRawJson(char* buffer, size_t buffer_size, const mesh::Packet& packet, bool is_tx, int rssi,
-                             float snr) const {
-  (void)is_tx;
-  (void)rssi;
-  (void)snr;
+int MQTTUplink::buildRawJson(char* buffer, size_t buffer_size, const mesh::Packet& packet) const {
   uint8_t raw[256];
   int raw_len = packet.writeTo(raw);
   char* raw_hex = allocScratchBuffer(520);
@@ -570,8 +546,7 @@ int MQTTUplink::buildRawJson(char* buffer, size_t buffer_size, const mesh::Packe
   char ts[32];
   formatIsoTimestamp(time(nullptr), ts, sizeof(ts));
   char origin[80];
-  const char* node_name = (_node_name != nullptr && _node_name[0] != 0) ? _node_name : _device_id;
-  escapeJsonString(node_name, origin, sizeof(origin));
+  formatOrigin(origin, sizeof(origin));
 
   int len = snprintf(buffer, buffer_size,
                      "{\"origin\":\"%s\",\"origin_id\":\"%s\",\"timestamp\":\"%s\",\"type\":\"RAW\",\"data\":\"%s\"}",
@@ -612,6 +587,19 @@ void MQTTUplink::publishStatus(bool online) {
   logMqttMemorySnapshot(online ? "status-post" : "status-offline-post");
 }
 
+void MQTTUplink::scheduleReconnect(BrokerState& broker, unsigned long now_ms) {
+  if (broker.reconnect_pending) {
+    return;
+  }
+  if (broker.reconnect_failures < 10) {
+    broker.reconnect_failures++;
+  }
+  broker.reconnect_pending = true;
+  broker.next_connect_attempt = now_ms + getBrokerRetryDelayMillis(broker.reconnect_failures);
+  MQTT_LOG("%s reconnect in %lu ms (failures=%u)", broker.spec->label,
+           getBrokerRetryDelayMillis(broker.reconnect_failures), static_cast<unsigned>(broker.reconnect_failures));
+}
+
 void MQTTUplink::handleMqttEvent(void* handler_args, esp_event_base_t, int32_t event_id, void* event_data) {
   auto* broker = static_cast<BrokerState*>(handler_args);
   if (broker == nullptr) {
@@ -638,16 +626,7 @@ void MQTTUplink::handleMqttEvent(void* handler_args, esp_event_base_t, int32_t e
       MQTT_LOG("%s disconnected wifi_status=%d rssi=%d connected_for_ms=%lu", broker->spec->label,
                static_cast<int>(WiFi.status()), WiFi.RSSI(), connected_for_ms);
       logMqttMemorySnapshot("disconnected", broker->spec->label);
-      if (!broker->reconnect_pending) {
-        if (broker->reconnect_failures < 10) {
-          broker->reconnect_failures++;
-        }
-        broker->reconnect_pending = true;
-        broker->next_connect_attempt = now_ms + getBrokerRetryDelayMillis(broker->reconnect_failures);
-        MQTT_LOG("%s reconnect in %lu ms (failures=%u)", broker->spec->label,
-                 getBrokerRetryDelayMillis(broker->reconnect_failures),
-                 static_cast<unsigned>(broker->reconnect_failures));
-      }
+      scheduleReconnect(*broker, now_ms);
       break;
     case MQTT_EVENT_ERROR:
       broker->connected = false;
@@ -681,16 +660,7 @@ void MQTTUplink::handleMqttEvent(void* handler_args, esp_event_base_t, int32_t e
       }
       MQTT_LOG("%s wifi_status=%d rssi=%d", broker->spec->label, static_cast<int>(WiFi.status()), WiFi.RSSI());
       logMqttMemorySnapshot("error", broker->spec->label);
-      if (!broker->reconnect_pending) {
-        if (broker->reconnect_failures < 10) {
-          broker->reconnect_failures++;
-        }
-        broker->reconnect_pending = true;
-        broker->next_connect_attempt = now_ms + getBrokerRetryDelayMillis(broker->reconnect_failures);
-        MQTT_LOG("%s reconnect in %lu ms (failures=%u)", broker->spec->label,
-                 getBrokerRetryDelayMillis(broker->reconnect_failures),
-                 static_cast<unsigned>(broker->reconnect_failures));
-      }
+      scheduleReconnect(*broker, now_ms);
       break;
     case MQTT_EVENT_BEFORE_CONNECT:
       MQTT_LOG("%s before connect", broker->spec->label);
@@ -708,11 +678,7 @@ void MQTTUplink::ensureBroker(BrokerState& broker, bool allow_new_connect) {
   bool enabled = (_prefs.enabled_mask & broker.spec->bit) != 0;
   bool iata_configured = !isUnsetIataValue(_prefs.iata);
   if (!enabled || !iata_configured) {
-    if (broker.client != nullptr || broker.token != nullptr || broker.connected || broker.connect_announced ||
-        broker.reconnect_pending || broker.next_connect_attempt != 0 || broker.last_connect_attempt != 0 ||
-        broker.reconnect_failures != 0 || broker.token_expires_at != 0) {
-      destroyBroker(broker);
-    }
+    destroyBroker(broker);  // no-op when the broker has no runtime state to tear down
     return;
   }
 
@@ -936,9 +902,7 @@ void MQTTUplink::publishPacket(const mesh::Packet& packet, bool is_tx, int rssi,
     // Bounded best-effort queue for short broker outages: replace the oldest
     // pending event when full; flushed after a minute with no broker.
     if (_queue_len >= kQueueCapacity) {
-      freeScratchBuffer(_queue[0].payload);
-      memmove(&_queue[0], &_queue[1], sizeof(QueuedEvent) * (kQueueCapacity - 1));
-      _queue_len--;
+      popFrontEvent();
       _stat_drop++;
     }
     _queue[_queue_len].payload = payload;  // ownership moves to the queue
@@ -961,7 +925,7 @@ void MQTTUplink::publishPacket(const mesh::Packet& packet, bool is_tx, int rssi,
   if (raw_payload == nullptr) {
     return;
   }
-  len = buildRawJson(raw_payload, 896, packet, is_tx, rssi, snr);
+  len = buildRawJson(raw_payload, 896, packet);
   if (len <= 0 || static_cast<size_t>(len) >= 896) {
     freeScratchBuffer(raw_payload);
     return;
@@ -1206,15 +1170,9 @@ bool MQTTUplink::setIata(const char* iata) {
   }
 
   char cleaned[sizeof(_prefs.iata)];
-  memset(cleaned, 0, sizeof(cleaned));
   makeSafeToken(iata, cleaned, sizeof(cleaned));
   for (size_t i = 0; cleaned[i] != 0; ++i) {
     cleaned[i] = toupper(static_cast<unsigned char>(cleaned[i]));
-  }
-  if (strcmp(cleaned, MQTT_UNSET_IATA) == 0) {
-    StrHelper::strncpy(_prefs.iata, MQTT_UNSET_IATA, sizeof(_prefs.iata));
-    refreshIdentityStrings();
-    return savePrefs();
   }
   StrHelper::strncpy(_prefs.iata, cleaned, sizeof(_prefs.iata));
   refreshIdentityStrings();

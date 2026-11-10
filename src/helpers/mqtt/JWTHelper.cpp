@@ -92,11 +92,8 @@ bool JWTHelper::createAuthToken(const mesh::LocalIdentity& identity, const char*
   uint8_t signature[64];
   identity.sign(signature, reinterpret_cast<const uint8_t*>(signing_input), signing_input_len);
 
-  char signature_hex[129];
-  for (size_t i = 0; i < sizeof(signature); ++i) {
-    snprintf(&signature_hex[i * 2], 3, "%02X", signature[i]);
-  }
-  signature_hex[128] = 0;
+  char signature_hex[129];  // 64-byte signature -> 128 hex chars + NUL
+  mesh::Utils::toHex(signature_hex, signature, sizeof(signature));
 
   int total_len = snprintf(token, token_size, "%s.%s", signing_input, signature_hex);
   return total_len > 0 && static_cast<size_t>(total_len) < token_size;

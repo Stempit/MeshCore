@@ -166,6 +166,9 @@ private:
   bool hasEnabledBroker() const;
   static uint8_t normalizeEnabledMask(uint8_t mask);
   void formatTopic(char* dst, size_t dst_size, const char* leaf) const;
+  // JSON field helpers shared by the status/packet builders.
+  void formatOrigin(char* origin, size_t origin_size) const;  // escaped node name (falls back to device id)
+  void formatRadioInfo(char* dst, size_t dst_size) const;     // "freq,bw,sf,cr"
   void refreshIdentityStrings();
   void refreshBrokerIdentity(BrokerState& broker);
   void refreshBrokerState(BrokerState& broker);
@@ -181,10 +184,13 @@ private:
   int buildStatusJson(char* buffer, size_t buffer_size, bool online) const;
   int buildPacketJson(char* buffer, size_t buffer_size, const mesh::Packet& packet, bool is_tx, int rssi, float snr,
                       int score, int duration) const;
-  int buildRawJson(char* buffer, size_t buffer_size, const mesh::Packet& packet, bool is_tx, int rssi, float snr) const;
+  int buildRawJson(char* buffer, size_t buffer_size, const mesh::Packet& packet) const;
   static void escapeJsonString(const char* input, char* output, size_t output_size);
   static void makeSafeToken(const char* input, char* output, size_t output_size);
   static void formatIsoTimestamp(time_t ts, char* dst, size_t dst_size);
+  static bool hasRuntimeState(const BrokerState& broker);  // anything to tear down?
+  static void scheduleReconnect(BrokerState& broker, unsigned long now_ms);
+  void popFrontEvent();  // free the oldest queued event and shift the rest forward
 #endif
 };
 
