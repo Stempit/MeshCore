@@ -52,7 +52,12 @@ public:
   bool setStatusEnabled(bool enabled);
   bool isStatusEnabled() const { return _prefs.status_enabled != 0; }
   bool setTxEnabled(bool enabled);
-  bool isTxEnabled() const { return _prefs.tx_enabled != 0; }
+  bool isTxEnabled() const { return _prefs.tx_mode != 0; }
+  bool setTxMode(uint8_t mode);  // 0 = off, 1 = on, 2 = own adverts only
+  uint8_t getTxMode() const { return _prefs.tx_mode; }
+  // Drop all broker connections and rejoin them from scratch (CLI `mqtt recover`
+  // pairs this with WifiLink::reconnectWifi()).
+  void requestReconnect();
   bool setIata(const char* iata);
   const char* getIata() const { return _prefs.iata; }
   const char* getClientVersion() const;
@@ -98,6 +103,15 @@ private:
     char client_id[48];
     char status_topic[128];
     char offline_payload[512];
+    // diagnostics written from the (static) MQTT event handler
+    uint8_t refused_count;        // consecutive broker-side CONNACK refusals
+    unsigned long last_err_ms;
+    uint8_t last_err_type;        // esp_mqtt_error_type_t
+    uint8_t last_err_conn_rc;     // esp_mqtt_connect_return_code_t
+    int last_err_sock;            // transport sock_errno
+    uint32_t last_err_tls_esp;
+    uint32_t last_err_tls_stack;
+    uint32_t last_err_cert;
   };
 #endif
 
@@ -121,6 +135,24 @@ private:
   static const BrokerSpec kBrokerSpecs[3];
   static bool isUnsetIataValue(const char* iata);
 
+  // Bounded best-effort queue for packets captured while no broker is
+  // connected (see drainQueue/flushQueue). Payloads are scratch-allocated
+  // (PSRAM when available) and owned by the queue.
+  struct QueuedEvent {
+    char* payload;
+    uint8_t attempts;
+  };
+  static constexpr uint8_t kQueueCapacity = 8;
+  static constexpr uint8_t kQueueMaxAttempts = 3;
+  static constexpr unsigned long kQueueFlushMillis = 60000;
+  QueuedEvent _queue[kQueueCapacity];
+  uint8_t _queue_len;
+  unsigned long _event_retry_at;
+  unsigned long _no_broker_since;  // 0 = at least one broker connected
+  uint32_t _stat_rx;
+  uint32_t _stat_pub;
+  uint32_t _stat_drop;
+
   BrokerState _brokers[3];
 
   static void handleMqttEvent(void* handler_args, esp_event_base_t base, int32_t event_id, void* event_data);
@@ -135,7 +167,11 @@ private:
   bool refreshToken(BrokerState& broker);
   void publishStatus(bool online);
   void publishOnlineStatus(BrokerState& broker);
-  void queuePublish(BrokerState& broker, const char* topic, const char* payload, bool retain);
+  bool queuePublish(BrokerState& broker, const char* topic, const char* payload, bool retain);
+  bool publishToConnected(const char* topic, const char* payload, bool retain);
+  void drainQueue(unsigned long now_ms);
+  void flushQueue();
+  uint8_t queueDepth() const { return _queue_len; }
   int buildStatusJson(char* buffer, size_t buffer_size, bool online) const;
   int buildPacketJson(char* buffer, size_t buffer_size, const mesh::Packet& packet, bool is_tx, int rssi, float snr,
                       int score, int duration) const;

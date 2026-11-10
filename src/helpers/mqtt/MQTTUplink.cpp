@@ -98,7 +98,8 @@ const MQTTUplink::BrokerSpec MQTTUplink::kBrokerSpecs[3] = {
 
 MQTTUplink::MQTTUplink(mesh::RTCClock& rtc, mesh::LocalIdentity& identity)
     : _fs(nullptr), _rtc(&rtc), _identity(&identity), _running(false), _last_status_publish(0), _last_status{},
-      _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _network(nullptr) {
+      _device_id{}, _node_name(nullptr), _firmware_version(nullptr), _network(nullptr), _queue{}, _queue_len(0),
+      _event_retry_at(0), _no_broker_since(0), _stat_rx(0), _stat_pub(0), _stat_drop(0), _brokers{} {
   memset(_device_id, 0, sizeof(_device_id));
   MQTTPrefsStore::setDefaults(_prefs);
   for (size_t i = 0; i < 3; ++i) {
@@ -294,7 +295,7 @@ void MQTTUplink::refreshBrokerState(BrokerState& broker) {
   formatIsoTimestamp(time(nullptr), ts, sizeof(ts));
   snprintf(broker.offline_payload, sizeof(broker.offline_payload),
            "{\"status\":\"offline\",\"timestamp\":\"%s\",\"origin\":\"%s\",\"origin_id\":\"%s\",\"model\":\"%s\","
-           "\"firmware_version\":\"%s\",\"radio\":\"%s\",\"client_version\":\"%s\"}",
+           "\"firmware_version\":\"%s\",\"radio\":\"%s\",\"client_version\":\"%s\",\"repeat\":true}",
            ts, origin, _device_id, model, _firmware_version != nullptr ? _firmware_version : "unknown", radio_info,
            client_version);
 }
@@ -389,14 +390,77 @@ void MQTTUplink::destroyBroker(BrokerState& broker, bool reset_retry_state) {
   logMqttMemorySnapshot("destroy-post", broker.spec != nullptr ? broker.spec->label : nullptr);
 }
 
-void MQTTUplink::queuePublish(BrokerState& broker, const char* topic, const char* payload, bool retain) {
+bool MQTTUplink::queuePublish(BrokerState& broker, const char* topic, const char* payload, bool retain) {
   if (broker.client == nullptr || !broker.connected) {
-    return;
+    return false;
   }
   MQTT_LOG("%s publish topic=%s retain=%d bytes=%u", broker.spec->label, topic, retain ? 1 : 0,
            static_cast<unsigned>(strlen(payload)));
   int enqueue_rc = esp_mqtt_client_enqueue(broker.client, topic, payload, 0, 1, retain, true);
   MQTT_LOG("%s enqueue topic=%s rc=%d connected=%d", broker.spec->label, topic, enqueue_rc, broker.connected ? 1 : 0);
+  return enqueue_rc >= 0;
+}
+
+bool MQTTUplink::publishToConnected(const char* topic, const char* payload, bool retain) {
+  bool any_ok = false;
+  for (BrokerState& broker : _brokers) {
+    if (broker.spec != nullptr && queuePublish(broker, topic, payload, retain)) {
+      any_ok = true;
+    }
+  }
+  return any_ok;
+}
+
+void MQTTUplink::drainQueue(unsigned long now_ms) {
+  if (_queue_len == 0) {
+    return;
+  }
+  if (!isAnyBrokerConnected()) {
+    // Give up on pending events after a full minute with no broker; they
+    // would be stale by the time a connection returns.
+    if (_no_broker_since != 0 && now_ms - _no_broker_since >= kQueueFlushMillis) {
+      flushQueue();
+    }
+    return;
+  }
+  if ((long)(now_ms - _event_retry_at) < 0) {
+    return;
+  }
+
+  char topic[128];
+  formatTopic(topic, sizeof(topic), "packets");
+  QueuedEvent& ev = _queue[0];
+  if (publishToConnected(topic, ev.payload, false)) {
+    _stat_pub++;
+    freeScratchBuffer(ev.payload);
+    memmove(&_queue[0], &_queue[1], sizeof(QueuedEvent) * (_queue_len - 1));
+    _queue_len--;
+    _event_retry_at = now_ms;
+    return;
+  }
+  ev.attempts++;
+  if (ev.attempts >= kQueueMaxAttempts) {
+    _stat_drop++;
+    freeScratchBuffer(ev.payload);
+    memmove(&_queue[0], &_queue[1], sizeof(QueuedEvent) * (_queue_len - 1));
+    _queue_len--;
+    _event_retry_at = now_ms + 100;
+  } else {
+    _event_retry_at = now_ms + 300 + (esp_random() % 200);
+  }
+}
+
+void MQTTUplink::flushQueue() {
+  if (_queue_len == 0) {
+    return;
+  }
+  MQTT_LOG("flush queue: dropping %u pending events", static_cast<unsigned>(_queue_len));
+  for (uint8_t i = 0; i < _queue_len; ++i) {
+    freeScratchBuffer(_queue[i].payload);
+  }
+  _stat_drop += _queue_len;
+  _queue_len = 0;
+  _event_retry_at = 0;
 }
 
 int MQTTUplink::buildStatusJson(char* buffer, size_t buffer_size, bool online) const {
@@ -415,6 +479,7 @@ int MQTTUplink::buildStatusJson(char* buffer, size_t buffer_size, bool online) c
   return snprintf(buffer, buffer_size,
                   "{\"status\":\"%s\",\"timestamp\":\"%s\",\"origin\":\"%s\",\"origin_id\":\"%s\","
                   "\"model\":\"%s\",\"firmware_version\":\"%s\",\"radio\":\"%s\",\"client_version\":\"%s\","
+                  "\"repeat\":true,"
                   "\"stats\":{\"battery_mv\":%d,\"uptime_secs\":%lu,\"errors\":%u,\"queue_len\":%u,"
                   "\"noise_floor\":%d,\"tx_air_secs\":%lu,\"rx_air_secs\":%lu,\"recv_errors\":%lu}}",
                   online ? "online" : "offline", ts, origin, _device_id, model,
@@ -575,6 +640,7 @@ void MQTTUplink::handleMqttEvent(void* handler_args, esp_event_base_t, int32_t e
       broker->next_connect_attempt = 0;
       broker->reconnect_failures = 0;
       broker->connected_since_ms = now_ms;
+      broker->refused_count = 0;
       MQTT_LOG("%s connected", broker->spec->label);
       logMqttMemorySnapshot("connected", broker->spec->label);
       break;
@@ -599,6 +665,23 @@ void MQTTUplink::handleMqttEvent(void* handler_args, esp_event_base_t, int32_t e
       broker->connected = false;
       broker->connected_since_ms = 0;
       if (event != nullptr && event->error_handle != nullptr) {
+        broker->last_err_ms = now_ms;
+        broker->last_err_type = static_cast<uint8_t>(event->error_handle->error_type);
+        broker->last_err_conn_rc = static_cast<uint8_t>(event->error_handle->connect_return_code);
+        broker->last_err_sock = event->error_handle->esp_transport_sock_errno;
+        broker->last_err_tls_esp = static_cast<uint32_t>(event->error_handle->esp_tls_last_esp_err);
+        broker->last_err_tls_stack = static_cast<uint32_t>(event->error_handle->esp_tls_stack_err);
+        broker->last_err_cert = static_cast<uint32_t>(event->error_handle->esp_tls_cert_verify_flags);
+        // A broker-side CONNACK refusal (bad credentials/identity) can leave
+        // stale broker-side session state bound to our identity; tracked so
+        // ensureBroker can rebuild the WiFi link after repeated refusals.
+        if (event->error_handle->error_type == MQTT_ERROR_TYPE_CONNECTION_REFUSED ||
+            (event->error_handle->connect_return_code != MQTT_CONNECTION_ACCEPTED &&
+             event->error_handle->connect_return_code != 0)) {
+          if (broker->refused_count < 255) {
+            broker->refused_count++;
+          }
+        }
         MQTT_LOG("%s error type=%d tls_esp=0x%x tls_stack=0x%x cert_flags=0x%x sock_errno=%d conn_refused=%d "
                  "connected_for_ms=%lu",
                  broker->spec->label, event->error_handle->error_type, event->error_handle->esp_tls_last_esp_err,
@@ -675,6 +758,19 @@ void MQTTUplink::ensureBroker(BrokerState& broker, bool allow_new_connect) {
   }
   broker.last_connect_attempt = now_ms;
   broker.reconnect_pending = false;
+
+  // Repeated broker-side refusals with a fresh token/client usually mean the
+  // broker kept stale session state bound to our identity; rebuilding the
+  // WiFi station gives fresh TCP/TLS state (what a reboot would provide).
+  if (broker.refused_count >= 5 && !broker.spec->plain_tcp) {
+    MQTT_LOG("%s %u consecutive refusals - requesting WiFi rejoin", broker.spec->label,
+             static_cast<unsigned>(broker.refused_count));
+    broker.refused_count = 0;
+    if (_network != nullptr) {
+      _network->requestWifiRejoin();
+    }
+    return;
+  }
 
   if (!broker.spec->plain_tcp && !refreshToken(broker)) {
     broker.reconnect_pending = true;
@@ -813,6 +909,14 @@ void MQTTUplink::loop(const MQTTStatusSnapshot& snapshot) {
     }
   }
 
+  unsigned long now_ms = millis();
+  if (isAnyBrokerConnected()) {
+    _no_broker_since = 0;
+  } else if (_no_broker_since == 0) {
+    _no_broker_since = now_ms;
+  }
+  drainQueue(now_ms);
+
   if (_prefs.status_enabled && hasEnabledBroker() && _network != nullptr && _network->hasTimeSync() &&
       millis() - _last_status_publish >= _prefs.status_interval_ms) {
     publishStatus(true);
@@ -825,9 +929,15 @@ void MQTTUplink::publishPacket(const mesh::Packet& packet, bool is_tx, int rssi,
       !_prefs.packets_enabled) {
     return;
   }
-  if (is_tx && !_prefs.tx_enabled) {
-    return;
+  if (is_tx) {
+    if (_prefs.tx_mode == 0) {
+      return;
+    }
+    if (_prefs.tx_mode == 2 && packet.getPayloadType() != PAYLOAD_TYPE_ADVERT) {
+      return;  // advert-only TX mode: node presence via own beacons, no relayed frames
+    }
   }
+  _stat_rx++;
   MQTT_LOG("packet dir=%s type=%u payload_len=%u rssi=%d snr=%.1f score=%d duration=%d",
            is_tx ? "tx" : "rx", packet.getPayloadType(), packet.payload_len, rssi, snr, score, duration);
 
@@ -843,10 +953,24 @@ void MQTTUplink::publishPacket(const mesh::Packet& packet, bool is_tx, int rssi,
 
   char topic[128];
   formatTopic(topic, sizeof(topic), "packets");
-  for (BrokerState& broker : _brokers) {
-    if (broker.spec != nullptr) {
-      queuePublish(broker, topic, payload, false);
+  if (!isAnyBrokerConnected()) {
+    // Bounded best-effort queue for short broker outages: replace the oldest
+    // pending event when full; flushed after a minute with no broker.
+    if (_queue_len >= kQueueCapacity) {
+      freeScratchBuffer(_queue[0].payload);
+      memmove(&_queue[0], &_queue[1], sizeof(QueuedEvent) * (kQueueCapacity - 1));
+      _queue_len--;
+      _stat_drop++;
     }
+    _queue[_queue_len].payload = payload;  // ownership moves to the queue
+    _queue[_queue_len].attempts = 0;
+    _queue_len++;
+    return;  // the raw feed stays live-only
+  }
+  if (publishToConnected(topic, payload, false)) {
+    _stat_pub++;
+  } else {
+    _stat_drop++;
   }
   freeScratchBuffer(payload);
 
@@ -906,12 +1030,19 @@ void MQTTUplink::formatStatusReply(char* reply, size_t reply_size) const {
     return "retry";
   };
 
-  snprintf(reply, reply_size, "> wifi:%s ntp:%s iata:%s meshcoretel:%s letsmesh-eu:%s letsmesh-us:%s status:%s tx:%s",
+  snprintf(reply, reply_size,
+           "> wifi:%s ntp:%s iata:%s meshcoretel:%s letsmesh-eu:%s letsmesh-us:%s status:%s tx:%s "
+           "rx:%lu pub:%lu drop:%lu q:%u/%u heap:%u/%u",
            (_network != nullptr && _network->isWifiConnected()) ? "up" : "down",
            (_network != nullptr && _network->hasTimeSync()) ? "up" : "wait",
            _prefs.iata,
            broker_state(kMeshcoretelBit), broker_state(kLetsmeshEuBit), broker_state(kLetsmeshUsBit),
-           _prefs.status_enabled ? "on" : "off", _prefs.tx_enabled ? "on" : "off");
+           _prefs.status_enabled ? "on" : "off",
+           _prefs.tx_mode == 0 ? "off" : (_prefs.tx_mode == 1 ? "on" : "advert"),
+           static_cast<unsigned long>(_stat_rx), static_cast<unsigned long>(_stat_pub),
+           static_cast<unsigned long>(_stat_drop),
+           static_cast<unsigned>(_queue_len), static_cast<unsigned>(kQueueCapacity),
+           static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMaxAllocHeap()));
 }
 
 bool MQTTUplink::setEndpointEnabled(uint8_t bit, bool enabled) {
@@ -949,8 +1080,24 @@ bool MQTTUplink::setStatusEnabled(bool enabled) {
 }
 
 bool MQTTUplink::setTxEnabled(bool enabled) {
-  _prefs.tx_enabled = enabled ? 1 : 0;
+  _prefs.tx_mode = enabled ? 1 : 0;
   return savePrefs();
+}
+
+bool MQTTUplink::setTxMode(uint8_t mode) {
+  if (mode > 2) {
+    return false;
+  }
+  _prefs.tx_mode = mode;
+  return savePrefs();
+}
+
+void MQTTUplink::requestReconnect() {
+  MQTT_LOG("reconnect requested - dropping all broker connections");
+  for (BrokerState& broker : _brokers) {
+    destroyBroker(broker);
+  }
+  _no_broker_since = millis();
 }
 
 bool MQTTUplink::setIata(const char* iata) {
@@ -1060,6 +1207,8 @@ bool MQTTUplink::setStatusEnabled(bool) { return false; }
 bool MQTTUplink::setTxEnabled(bool) { return false; }
 bool MQTTUplink::setIata(const char*) { return false; }
 bool MQTTUplink::isActive() const { return false; }
+bool MQTTUplink::setTxMode(uint8_t) { return false; }
+void MQTTUplink::requestReconnect() {}
 bool MQTTUplink::setOwnerPublicKey(const char*) { return false; }
 bool MQTTUplink::setOwnerEmail(const char*) { return false; }
 bool MQTTUplink::sendStatusNow() { return false; }

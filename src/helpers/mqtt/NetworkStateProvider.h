@@ -9,6 +9,9 @@ public:
   virtual ~NetworkStateProvider() {}
   virtual bool isWifiConnected() const = 0;
   virtual bool hasTimeSync() const = 0;
+  // Drop the WiFi link and rejoin, so TCP/TLS state is rebuilt from scratch
+  // (the same thing a reboot provides, without rebooting the node).
+  virtual void requestWifiRejoin() {}
 };
 
 #endif

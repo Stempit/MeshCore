@@ -33,6 +33,7 @@ public:
 
   bool isWifiConnected() const override;
   bool hasTimeSync() const override;
+  void requestWifiRejoin() override { reconnectWifi(); }
 
 private:
 #if defined(ESP_PLATFORM)

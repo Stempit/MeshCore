@@ -1352,7 +1352,7 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
   } else if (memcmp(command, "get mqtt.raw", 12) == 0) {
     sprintf(reply, "> %s", mqtt.isRawEnabled() ? "on" : "off");
   } else if (memcmp(command, "get mqtt.tx", 11) == 0) {
-    sprintf(reply, "> %s", mqtt.isTxEnabled() ? "on" : "off");
+    sprintf(reply, "> %s", mqtt.getTxMode() == 0 ? "off" : (mqtt.getTxMode() == 1 ? "on" : "advert"));
   } else if (memcmp(command, "get mqtt.meshcoretel", 20) == 0) {
     sprintf(reply, "> %s", mqtt.isEndpointEnabled(0x01) ? "on" : "off");
   } else if (memcmp(command, "get mqtt.letsmesh-eu", 20) == 0 || memcmp(command, "get mqtt.letsmesh.eu", 20) == 0) {
@@ -1387,8 +1387,20 @@ void MyMesh::handleCommand(uint32_t sender_timestamp, char *command, char *reply
     mqtt.setStatusEnabled(memcmp(&command[16], "on", 2) == 0);
     strcpy(reply, "OK");
   } else if (memcmp(command, "set mqtt.tx ", 12) == 0) {
-    mqtt.setTxEnabled(memcmp(&command[12], "on", 2) == 0);
+    uint8_t mode;
+    if (memcmp(&command[12], "on", 2) == 0) {
+      mode = 1;
+    } else if (memcmp(&command[12], "advert", 6) == 0) {
+      mode = 2;
+    } else {
+      mode = 0;
+    }
+    mqtt.setTxMode(mode);
     strcpy(reply, "OK");
+  } else if (strcmp(command, "mqtt recover") == 0) {
+    mqtt.requestReconnect();
+    wifi_link.reconnectWifi();
+    strcpy(reply, "OK - Wi-Fi reset requested");
   } else if (memcmp(command, "set mqtt.meshcoretel ", 21) == 0) {
     if (mqtt.setEndpointEnabled(0x01, memcmp(&command[21], "on", 2) == 0)) {
       strcpy(reply, "OK");

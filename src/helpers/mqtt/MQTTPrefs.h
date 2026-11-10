@@ -19,7 +19,7 @@ struct MQTTPrefs {
   uint8_t packets_enabled;
   uint8_t raw_enabled;
   uint8_t status_enabled;
-  uint8_t tx_enabled;
+  uint8_t tx_mode;            // 0 = off, 1 = on (all own TX), 2 = own adverts only
   uint8_t wifi_powersave;     // 0 = none, 1 = min, 2 = max
   uint8_t reserved[2];
   uint32_t status_interval_ms;

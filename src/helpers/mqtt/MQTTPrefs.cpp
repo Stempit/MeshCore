@@ -17,7 +17,7 @@ void MQTTPrefsStore::setDefaults(MQTTPrefs& prefs) {
   prefs.packets_enabled = 1;
   prefs.raw_enabled = 0;
   prefs.status_enabled = 1;
-  prefs.tx_enabled = 0;
+  prefs.tx_mode = 0;
   prefs.wifi_powersave = 0;
   prefs.status_interval_ms = kFixedStatusIntervalMs;
   StrHelper::strncpy(prefs.iata, MQTT_DEFAULT_IATA, sizeof(prefs.iata));
