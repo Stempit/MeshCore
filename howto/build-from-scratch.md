@@ -112,6 +112,12 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
 To confirm you booted the right build: boot screen shows `v1.18.0`, and
 `get mqtt.client_version` replies `observer-meshcoretel`.
 
+Browser flashing also works: on `flasher.meshcore.dev` select the board
+**first**, then use its **Custom Firmware** option and pick our
+`firmware-merged.bin`. Beware: the flasher's *normal* install flow always
+downloads MeshCore's own stock build (currently v1.17.1 for repeaters) — it
+never flashes your local file.
+
 Then continue with [setup.md](setup.md).
 
 ## Troubleshooting
