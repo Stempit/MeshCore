@@ -1,3 +1,47 @@
+<!-- stempit fork header: rebase-friendly, keep at top -->
+# MeshCore — observer_meshcoretel fork
+
+This is a fork of [meshcore-dev/MeshCore](https://github.com/meshcore-dev/MeshCore)
+adding **community MQTT telemetry ("observer") firmware and Kirov-region (KVX)
+defaults** on top of the stock firmware, as small build-flag modules:
+
+| Build flag | Product | Environments |
+|---|---|---|
+| `WITH_MQTT_UPLINK` | `*_observer_meshcoretel` — repeater + WiFi/MQTT telemetry to [meshcoretel.ru](https://meshcoretel.ru) | 17 ESP32 boards |
+| `+ WITH_KVX_DEFAULTS` | `*_observer_meshcoretel_kvx` — same, plus first-boot KVX defaults | 17 ESP32 boards |
+| `WITH_KVX_DEFAULTS` | `*_repeater_kvx` — stock repeater + KVX defaults, no WiFi/MQTT (nRF52 supported) | 6 boards |
+
+KVX defaults (seeded once, on a never-configured node, never overwriting user
+settings): 868.731 MHz / 62.5 kHz / SF8 / CR8, path.hash.mode 1 (2-byte),
+cad on, txdelay 2, rxdelay 5, loop.detect minimal, tx 22, advert.interval 240,
+flood.advert.interval 24, name `KRV_repeater`, regions `ru`/`kvx`, and
+`mqtt.iata KVX` on observer builds.
+
+Fork philosophy: everything lives in **additive files**
+(`src/helpers/mqtt/`, `src/helpers/kvx/`, `examples/simple_repeater/ObserverMesh.*`,
+root `*_kvx.ini` env files) — the diff vs upstream is ~20 lines in 3 files,
+so upstream releases rebase cleanly. MQTT uses the IDF-native `esp_mqtt_client`
+(no new library dependencies).
+
+**Docs:** [howto/](howto/) — build from scratch, release updates, adding
+boards, node setup (English + Russian).
+
+**Credits** (in order of influence):
+- [VBart/MeshCoreTel-firmware](https://github.com/VBart/MeshCoreTel-firmware) —
+  the `src/helpers/mqtt/` module was ported from this production-proven
+  meshcoretel.ru implementation
+- [jhuebert/MeshCore](https://github.com/jhuebert/MeshCore) (`repeater-filter`) —
+  observer design ideas adopted: bounded offline queue, `mqtt.tx advert`,
+  connection recovery, status counters
+- [agessaman/MeshCore](https://github.com/agessaman/MeshCore) (`mqtt-bridge-implementation`) —
+  early reference for in-firmware MQTT bridging
+- [Cisien/meshcoretomqtt](https://github.com/Cisien/meshcoretomqtt) — the
+  host-side bridge (used for nRF52 boards without WiFi); its design choices
+  (QoS0 packets, topic scheme) validated ours
+- [meshcoretel.ru](https://meshcoretel.ru) community broker and analyzer
+
+---
+
 ## About MeshCore
 
 MeshCore is a lightweight, portable C++ library that enables multi-hop packet routing for embedded projects using LoRa and other packet radios. It is designed for developers who want to create resilient, decentralized communication networks that work without the internet.
