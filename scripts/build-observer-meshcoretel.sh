@@ -177,7 +177,8 @@ for ENV_NAME in "${ENVS[@]}"; do
   BUILD_DIR=".pio/build/$ENV_NAME"
   ENV_DEST="$DEST/$ENV_NAME"
   mkdir -p "$ENV_DEST"
-  for f in firmware.bin firmware.elf bootloader.bin partitions.bin boot_app0.bin; do
+  # (uf2 glob stays literal on ESP32 builds where none exist; the -f check guards it)
+  for f in firmware.bin firmware.elf bootloader.bin partitions.bin boot_app0.bin *.uf2; do
     [[ -f "$BUILD_DIR/$f" ]] && cp "$BUILD_DIR/$f" "$ENV_DEST/"
   done
   # merged image (flashable single bin) produced by upstream merge-bin.py

@@ -53,12 +53,6 @@ void replay(MeshT& mesh, const char* const commands[], size_t count) {
 
 template <typename MeshT>
 void applyIfFresh(FILESYSTEM* fs, MeshT& mesh) {
-  static bool seeded_once = false;
-  if (seeded_once) {
-    return;
-  }
-  seeded_once = true;
-
   // A device that has saved any settings is considered configured — never
   // touch it. A device that only ever booted on factory defaults (no prefs
   // files, no regions file) gets the KVX defaults.

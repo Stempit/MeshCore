@@ -43,14 +43,10 @@ void ObserverMesh::begin(FILESYSTEM* fs) {
 
   MyMesh::begin(fs);
 
-  // Server-visible version identity: "<base>_meshcoretel[_kvx]_mod_<ver>"
-  // (ModVersion.h). The base release the build is from stays on the boot
-  // screen; the serial line additionally carries the build time.
-#ifdef WITH_KVX_DEFAULTS
-  mqtt.setFirmwareVersion(FIRMWARE_VERSION "_meshcoretel_kvx_mod_" MESHCORETEL_MOD_VERSION);
-#else
-  mqtt.setFirmwareVersion(FIRMWARE_VERSION "_meshcoretel_mod_" MESHCORETEL_MOD_VERSION);
-#endif
+  // Server-visible version identity: "<base><segment><mod version>" with the
+  // segment from ModVersion.h. The base release the build is from stays on
+  // the boot screen; the serial line additionally carries the build time.
+  mqtt.setFirmwareVersion(FIRMWARE_VERSION MESHCORETEL_MOD_SEGMENT MESHCORETEL_MOD_VERSION);
   Serial.printf("[observer] firmware built " __DATE__ " " __TIME__ "\n");
   mqtt.setNodeNameSource(getNodePrefs()->node_name);
   mqtt.setBoardModel(board.getManufacturerName());
