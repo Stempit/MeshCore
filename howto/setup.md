@@ -69,6 +69,22 @@ mqtt recover            # rebuild WiFi + broker connections from scratch
 reboot                  # settings persist
 ```
 
+### What the feeds publish
+
+- **`mqtt.packets` (on by default — the main telemetry)**: one JSON per
+  received frame with its RF measurements — `packet_type` (advert / text /
+  ACK / path / trace…), `route` D/F, `SNR`/`RSSI` at this observer, `score`,
+  `duration`, `hash`. Content stays encrypted; the server decodes what it has
+  keys for. This is what builds the coverage map and per-link statistics —
+  leave it on for any observer. A packet heard via several relays is
+  published once per reception (different SNR/RSSI each — intended).
+- **`mqtt.raw` (off by default)**: the same frames as bare hex with no
+  measurements on a separate `/raw` topic. For debugging your own decoders or
+  capturing traffic the server parser doesn't understand. It duplicates the
+  `raw` field already inside `packets` and doubles uplink traffic — keep it
+  off unless you specifically need it. Unlike `packets`, `raw` is not queued
+  during broker outages.
+
 Radio settings must match the regional settings of your mesh — follow the
 meshcoretel.ru guidance for the region (KVX); do not copy radio parameters
 from other regions' pages.
