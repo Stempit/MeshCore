@@ -1,7 +1,7 @@
 # Сборка прошивки наблюдателя с нуля
 
 Для машины, на которой этот проект ещё никогда не собирался. Результат —
-прошиваемые образы в `out/observer_meshcoretel/<версия>/`.
+прошиваемые образы в `out/observer-meshcoretel/<версия>/`.
 
 ## 1. Что нужно установить
 
@@ -66,8 +66,8 @@ Flash: [====      ]  40.3% (used 1347317 bytes from 3342336 bytes)
 ## 4. Где лежит прошивка
 
 ```
-out/observer_meshcoretel/<версия>/<env>/
-  firmware-merged.bin   ← прошиваем этот файл (bootloader + разделы + прошивка)
+out/observer-meshcoretel/<версия>/<env>/
+  <EnvName>-v<версия>-<sha>-merged.bin   ← прошиваем этот файл (bootloader + разделы + прошивка)
   firmware.bin          ← только приложение
   bootloader.bin, partitions.bin
 ```
@@ -90,10 +90,10 @@ pio run -e Heltec_v3_observer_meshcoretel -t upload --upload-port /dev/ttyUSB0
 
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer_meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
+    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/Heltec_v3_observer_meshcoretel-v1.18.0-<sha>-merged.bin
 ```
 
-`firmware-merged.bin` записывает bootloader, таблицу разделов и приложение
+`<EnvName>-v<версия>-<sha>-merged.bin` записывает bootloader, таблицу разделов и приложение
 одной командой — всегда предпочитайте его ручному подбору смещений.
 
 ⚠️ **Никогда не прошивайте один `firmware.bin` на устройство, где стояла
@@ -106,7 +106,7 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer_meshcoretel/<версия>/<env>/firmware-merged.bin
+    write_flash 0x0 out/observer-meshcoretel/<версия>/<env>/<EnvName>-v<версия>-<sha>-merged.bin
 ```
 
 (`erase_flash` стирает и файловую систему — identity и настройки сбрасываются.)
@@ -114,7 +114,7 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
 а `get mqtt.client_version` отвечает `observer_meshcoretel_v0.1.0`.
 
 Браузерная прошивка тоже работает: на `flasher.meshcore.dev` сначала выберите
-плату, затем пункт **Custom Firmware** и укажите наш `firmware-merged.bin`.
+плату, затем пункт **Custom Firmware** и укажите наш `<EnvName>-v<версия>-<sha>-merged.bin`.
 Осторожно: обычный сценарий установки флешера всегда скачивает стоковую
 сборку MeshCore (сейчас это v1.17.1 для ретрансляторов) — ваш локальный файл
 он не прошивает.

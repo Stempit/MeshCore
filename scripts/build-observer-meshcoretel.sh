@@ -161,35 +161,102 @@ for ENV_NAME in "${ENVS[@]}"; do
   if ! grep -q "\[env:${ENV_NAME}\]" observer_meshcoretel.ini observer_meshcoretel_kvx.ini repeater_kvx.ini variants/*/platformio.ini; then
     echo "ERROR: env '$ENV_NAME' not found in the project ini files" >&2
     FAILED=1
-    continue
   fi
-  echo ""
-  echo "==================================================================="
-  echo ">> building $ENV_NAME"
-  echo "==================================================================="
-  if ! pio run -e "$ENV_NAME"; then
-    echo "BUILD FAILED: $ENV_NAME" >&2
-    FAILED=1
-    continue
-  fi
-  # upstream merge-bin.py exposes the flashable single image as a custom target
-  pio run -e "$ENV_NAME" -t mergebin >/dev/null 2>&1 || echo "WARN: mergebin target failed for $ENV_NAME" >&2
-  BUILD_DIR=".pio/build/$ENV_NAME"
-  ENV_DEST="$DEST/$ENV_NAME"
-  mkdir -p "$ENV_DEST"
-  # (uf2 glob stays literal on ESP32 builds where none exist; the -f check guards it)
-  for f in firmware.bin firmware.elf bootloader.bin partitions.bin boot_app0.bin *.uf2; do
-    [[ -f "$BUILD_DIR/$f" ]] && cp "$BUILD_DIR/$f" "$ENV_DEST/"
-  done
-  # merged image (flashable single bin) produced by upstream merge-bin.py
-  MERGED="$(find "$BUILD_DIR" -maxdepth 1 -name '*merged.bin' | head -1)"
-  [[ -n "$MERGED" ]] && cp "$MERGED" "$ENV_DEST/"
-  echo ">> artifacts: $ENV_DEST"
 done
-
-echo ""
 if [[ "$FAILED" != "0" ]]; then
-  echo "FINISHED WITH FAILURES — see output above" >&2
+  echo "FINISHED WITH FAILURES — fix the env names and re-run" >&2
   exit 1
 fi
-echo ">> all builds OK — artifacts in $DEST/"
+
+# Pre-warm dependency resolution sequentially: when parallel pio processes
+# resolve libdeps on a cold shared cache, each clones git deps (e.g. the
+# pinned RadioLib) itself. Resolving one env at a time populates the shared
+# mirror once, so parallel builds never race the network. Only cold envs are
+# resolved; each call is time-bounded so a stalled fetch can't block the run.
+for ENV_NAME in "${ENVS[@]}"; do
+  [[ -d ".pio/libdeps/$ENV_NAME" ]] && continue
+  echo ">> pre-warming deps: $ENV_NAME"
+  perl -e 'alarm shift; exec @ARGV' 120 pio pkg install -e "$ENV_NAME" -s >/dev/null 2>&1 \
+    || echo "WARN: dependency pre-warm skipped for $ENV_NAME (timeout/failure — its build may fetch deps itself)" >&2
+done
+
+# Parallel build: BUILD_JOBS envs at a time (default 4). Envs build in separate
+# .pio/build/<env> dirs, so concurrent pio processes don't collide; per-env
+# output is kept in a log file. BUILD_JOBS=1 restores sequential behavior.
+JOBS="${BUILD_JOBS:-4}"
+
+# Build cache (SCons CacheDir via PlatformIO's build_cache_dir option): object
+# files are stored/restored by hash, so a rebuild after rebasing onto a new
+# upstream release only compiles genuinely changed sources. Enabled in the
+# gitignored platformio.local.ini (loaded by upstream extra_configs) so no
+# upstream file changes; skipped if the user configured their own.
+LOCAL_INI="platformio.local.ini"
+if ! grep -q "build_cache_dir" "$LOCAL_INI" 2>/dev/null; then
+  echo ">> enabling build cache in $LOCAL_INI"
+  printf '\n[platformio]\nbuild_cache_dir = %s/.pio/build_cache\n' "$REPO_ROOT" >> "$LOCAL_INI"
+fi
+
+# Split the CPU budget between concurrent envs (each pio compiles with -j jobs)
+NCPU="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+PIO_JOBS=$(( NCPU / JOBS )); [[ "$PIO_JOBS" -lt 1 ]] && PIO_JOBS=1
+
+# Release asset identity, upstream-style: <EnvName>-v<version>-<shortSHA>-...
+SHA="$(git rev-parse --short=7 HEAD)"
+VVER="v${VERSION}"
+
+LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/observer-build-logs.XXXXXX")"
+FAIL_LIST="$LOG_DIR/failures.txt"
+: > "$FAIL_LIST"
+
+build_one() {
+  local ENV_NAME="$1"
+  local LOG="$LOG_DIR/$ENV_NAME.log"
+  echo ">> building $ENV_NAME"
+  if ! pio run -e "$ENV_NAME" -j "$PIO_JOBS" >"$LOG" 2>&1; then
+    echo "$ENV_NAME" >> "$FAIL_LIST"
+    echo ">> BUILD FAILED: $ENV_NAME (log: $LOG)" >&2
+    return 1
+  fi
+  local BUILD_DIR=".pio/build/$ENV_NAME" ENV_DEST="$DEST/$ENV_NAME" f
+  mkdir -p "$ENV_DEST"
+  # Platform-specific post-processing (both are upstream custom targets):
+  # ESP32 -> merged flashable image; nRF52 -> uf2 (drag-and-drop flashing).
+  if [[ -f "$BUILD_DIR/bootloader.bin" ]]; then
+    pio run -e "$ENV_NAME" -t mergebin >>"$LOG" 2>&1 || echo "WARN: mergebin failed for $ENV_NAME" >&2
+  else
+    pio run -e "$ENV_NAME" -t create_uf2 >>"$LOG" 2>&1 || echo "WARN: create_uf2 failed for $ENV_NAME" >&2
+  fi
+  # Release asset names follow the upstream convention
+  # (<EnvName>-v<version>-<shortSHA>-merged.bin|.bin|.uf2|.zip); only
+  # flashable images ship — no ELF/hex/bootloader/partitions.
+  if [[ -f "$BUILD_DIR/firmware-merged.bin" ]]; then
+    cp "$BUILD_DIR/firmware-merged.bin" "$ENV_DEST/${ENV_NAME}-${VVER}-${SHA}-merged.bin"
+  fi
+  if [[ -f "$BUILD_DIR/firmware.bin" ]]; then
+    cp "$BUILD_DIR/firmware.bin" "$ENV_DEST/${ENV_NAME}-${VVER}-${SHA}.bin"
+  fi
+  if [[ -f "$BUILD_DIR/firmware.uf2" ]]; then
+    cp "$BUILD_DIR/firmware.uf2" "$ENV_DEST/${ENV_NAME}-${VVER}-${SHA}.uf2"
+  fi
+  if [[ -f "$BUILD_DIR/firmware.zip" ]]; then
+    cp "$BUILD_DIR/firmware.zip" "$ENV_DEST/${ENV_NAME}-${VVER}-${SHA}.zip"
+  fi
+  echo ">> done: $ENV_NAME"
+}
+
+for ENV_NAME in "${ENVS[@]}"; do
+  while [[ "$(jobs -rp | wc -l | tr -d ' ')" -ge "$JOBS" ]]; do
+    sleep 2
+  done
+  build_one "$ENV_NAME" &
+done
+wait
+
+echo ""
+if [[ -s "$FAIL_LIST" ]]; then
+  echo "FINISHED WITH FAILURES:" >&2
+  cat "$FAIL_LIST" >&2
+  echo "per-env logs: $LOG_DIR" >&2
+  exit 1
+fi
+echo ">> all builds OK — artifacts in $DEST/ (per-env logs: $LOG_DIR)"

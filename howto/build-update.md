@@ -20,7 +20,7 @@ With no arguments the script:
    stops and prints exactly what to do (`git rebase --continue` after
    resolving, or `git rebase --abort` to give up);
 3. builds **all 17** `*_observer_meshcoretel` environments;
-4. writes fresh images to `out/observer_meshcoretel/<new-version>/<env>/`.
+4. writes fresh images to `out/observer-meshcoretel/<new-version>/<env>/`.
 
 To target a specific release instead of the newest one:
 
@@ -49,7 +49,7 @@ The supported path is a **fresh/clean install** — it avoids every
 firmware-compatibility question (old versions, OTA slots, partition layouts):
 
 1. On `flasher.meshcore.dev` select the board **first**, then use
-   **Custom Firmware** and pick `firmware-merged.bin` from the new version
+   **Custom Firmware** and pick `<EnvName>-v<version>-<sha>-merged.bin` from the new version
    directory (see [build-from-scratch.md](build-from-scratch.md) § Flash a
    board).
 2. Or locally:
@@ -57,7 +57,7 @@ firmware-compatibility question (old versions, OTA slots, partition layouts):
    ```sh
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-       write_flash 0x0 out/observer_meshcoretel/<version>/<env>/firmware-merged.bin
+       write_flash 0x0 out/observer-meshcoretel/<version>/<env>/<EnvName>-v<version>-<sha>-merged.bin
    ```
 
 A clean install wipes the filesystem: the node generates a **new identity**

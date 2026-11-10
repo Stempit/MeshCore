@@ -1,7 +1,7 @@
 # Building the observer firmware from scratch
 
 Target audience: a fresh machine that has never built this project. End
-result: flashable firmware images in `out/observer_meshcoretel/<version>/`.
+result: flashable firmware images in `out/observer-meshcoretel/<version>/`.
 
 ## 1. Prerequisites
 
@@ -66,8 +66,8 @@ partition override.
 ## 4. Where the firmware is
 
 ```
-out/observer_meshcoretel/<version>/<env>/
-  firmware-merged.bin   ← flash this (bootloader + partitions + firmware)
+out/observer-meshcoretel/<version>/<env>/
+  <EnvName>-v<version>-<sha>-merged.bin   ← flash this (bootloader + partitions + firmware)
   firmware.bin          ← app only
   bootloader.bin, partitions.bin
 ```
@@ -90,10 +90,10 @@ board: `esp32`, `esp32s3`, `esp32c3`):
 
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer_meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/firmware-merged.bin
+    write_flash 0x0 out/observer-meshcoretel/1.18.0/Heltec_v3_observer_meshcoretel/Heltec_v3_observer_meshcoretel-v1.18.0-<sha>-merged.bin
 ```
 
-`firmware-merged.bin` writes bootloader, partition table and app in one go —
+The `-merged.bin` image writes bootloader, partition table and app in one go —
 always prefer it over assembling offsets by hand.
 
 ⚠️ **Never flash `firmware.bin` alone on a device that ran other firmware.**
@@ -105,7 +105,7 @@ doubt, wipe first and flash the merged image:
 ```sh
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-    write_flash 0x0 out/observer_meshcoretel/<version>/<env>/firmware-merged.bin
+    write_flash 0x0 out/observer-meshcoretel/<version>/<env>/<EnvName>-v<version>-<sha>-merged.bin
 ```
 
 (`erase_flash` wipes the filesystem too — identity and settings are reset.)
@@ -114,7 +114,7 @@ To confirm you booted the right build: boot screen shows `v1.18.0`, and
 
 Browser flashing also works: on `flasher.meshcore.dev` select the board
 **first**, then use its **Custom Firmware** option and pick our
-`firmware-merged.bin`. Beware: the flasher's *normal* install flow always
+`<EnvName>-v<version>-<sha>-merged.bin`. Beware: the flasher's *normal* install flow always
 downloads MeshCore's own stock build (currently v1.17.1 for repeaters) — it
 never flashes your local file.
 

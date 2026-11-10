@@ -20,7 +20,7 @@ git checkout mqtt-uplink
    скрипт останавливается и печатает, что делать (`git rebase --continue`
    после разрешения, или `git rebase --abort` для отмены);
 3. собирает **все 17** окружений `*_observer_meshcoretel`;
-4. складывает свежие образы в `out/observer_meshcoretel/<новая-версия>/<env>/`.
+4. складывает свежие образы в `out/observer-meshcoretel/<новая-версия>/<env>/`.
 
 Чтобы собрать под конкретный релиз, а не новейший:
 
@@ -50,7 +50,7 @@ git checkout mqtt-uplink
 совместимости прошивок (старые версии, OTA-слоты, раскладки разделов):
 
 1. На `flasher.meshcore.dev` сначала выберите плату, затем пункт
-   **Custom Firmware** и укажите `firmware-merged.bin` из каталога новой
+   **Custom Firmware** и укажите образ `-merged.bin` из каталога новой
    версии (см. [build-from-scratch.ru.md](build-from-scratch.ru.md),
    раздел «Прошиваем плату»).
 2. Или локально:
@@ -58,7 +58,7 @@ git checkout mqtt-uplink
    ```sh
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-       write_flash 0x0 out/observer_meshcoretel/<версия>/<env>/firmware-merged.bin
+       write_flash 0x0 out/observer-meshcoretel/<версия>/<env>/<EnvName>-v<версия>-<sha>-merged.bin
    ```
 
 Чистая установка стирает файловую систему: узел генерирует **новую identity**,
