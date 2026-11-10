@@ -43,42 +43,26 @@ One board only (quick smoke test before the full matrix):
 3. **One canary node first**: flash one representative board, verify
    `get mqtt.status` and packet flow on meshcoretel.ru, then roll out the rest.
 
-## Re-flashing a node (update in place)
+## Re-flashing a node (fresh install)
 
-Flash `firmware-merged.bin` from the new version directory (see
-[build-from-scratch.md](build-from-scratch.md) § Flash a board).
+The supported path is a **fresh/clean install** — it avoids every
+firmware-compatibility question (old versions, OTA slots, partition layouts):
 
-**Settings survive** a firmware update as long as the partition layout is the
-same as the previously installed firmware: node identity, repeater settings
-(`/prefs.json`) and observer settings (`/mqtt_prefs`: wifi, iata, broker
-switches) all live in the SPIFFS partition, which a `firmware-merged.bin`
-flash rewrites only when the partition table itself changed.
+1. On `flasher.meshcore.dev` select the board **first**, then use
+   **Custom Firmware** and pick `firmware-merged.bin` from the new version
+   directory (see [build-from-scratch.md](build-from-scratch.md) § Flash a
+   board).
+2. Or locally:
 
-**In-place update (settings preserved)** — the recommended path when the
-board previously ran stock repeater firmware (same partition table; true for
-all boards except the two min_spiffs ones below). This flashes the app and
-resets only `otadata` (the boot-slot pointer), never touching SPIFFS — the
-node keeps its identity (same pubkey!), settings and contacts:
+   ```sh
+   esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 erase_flash
+   esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+       write_flash 0x0 out/observer-meshcoretel/<version>/<env>/firmware-merged.bin
+   ```
 
-```sh
-scripts/flash-update.sh -e Heltec_v4_observer_meshcoretel -p /dev/ttyUSB0
-```
-
-If the node was converting **from stock firmware**, it has no observer
-settings yet — run the [setup](setup.md) once; the *node identity* is still
-preserved.
-
-⚠️ **Exception — T-Beam 1W and Generic E22** (and any board you gave a
-`min_spiffs.csv` override): their observer builds use a different partition
-table than stock MeshCore repeater firmware. Converting such a node **from
-stock firmware to the observer build** (or back) reformats the filesystem —
-write down your settings first (`get wifi.ssid`, `get mqtt.iata`) and expect
-to run the [setup](setup.md) again. Updates **between observer builds** keep
-settings normally. For those boards use:
-
-```sh
-scripts/flash-update.sh -e LilyGo_TBeam_1W_observer_meshcoretel -p /dev/ttyACM0 --erase-all
-```
+A clean install wipes the filesystem: the node generates a **new identity**
+and all settings reset — re-run the [setup](setup.md) after flashing and
+expect the node to re-appear under the same IATA but with a new pubkey.
 
 ## Keeping the fork and docs in sync
 
