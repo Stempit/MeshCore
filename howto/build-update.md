@@ -54,13 +54,31 @@ same as the previously installed firmware: node identity, repeater settings
 switches) all live in the SPIFFS partition, which a `firmware-merged.bin`
 flash rewrites only when the partition table itself changed.
 
+**In-place update (settings preserved)** — the recommended path when the
+board previously ran stock repeater firmware (same partition table; true for
+all boards except the two min_spiffs ones below). This flashes the app and
+resets only `otadata` (the boot-slot pointer), never touching SPIFFS — the
+node keeps its identity (same pubkey!), settings and contacts:
+
+```sh
+scripts/flash-update.sh -e Heltec_v4_observer_meshcoretel -p /dev/ttyUSB0
+```
+
+If the node was converting **from stock firmware**, it has no observer
+settings yet — run the [setup](setup.md) once; the *node identity* is still
+preserved.
+
 ⚠️ **Exception — T-Beam 1W and Generic E22** (and any board you gave a
 `min_spiffs.csv` override): their observer builds use a different partition
 table than stock MeshCore repeater firmware. Converting such a node **from
 stock firmware to the observer build** (or back) reformats the filesystem —
 write down your settings first (`get wifi.ssid`, `get mqtt.iata`) and expect
 to run the [setup](setup.md) again. Updates **between observer builds** keep
-settings normally.
+settings normally. For those boards use:
+
+```sh
+scripts/flash-update.sh -e LilyGo_TBeam_1W_observer_meshcoretel -p /dev/ttyACM0 --erase-all
+```
 
 ## Keeping the fork and docs in sync
 
