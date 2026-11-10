@@ -319,6 +319,21 @@ if [[ -s "$FAIL_LIST" ]]; then
   done < "$RETRY_LIST"
 fi
 
+# Populate out/dist: flat per-release-type folders ready for GitHub release
+# upload (no env subdirectories).
+DIST="$REPO_ROOT/out/dist"
+rm -rf "$DIST"
+mkdir -p "$DIST/repeater_kvx" "$DIST/observer_meshcoretel" "$DIST/observer_meshcoretel_kvx"
+for f in "$DEST"/*/*; do
+  [[ -f "$f" ]] || continue
+  base="$(basename "$f")"
+  case "$base" in
+    *_repeater_kvx-*)          cp "$f" "$DIST/repeater_kvx/" ;;
+    *_observer_meshcoretel_kvx-*) cp "$f" "$DIST/observer_meshcoretel_kvx/" ;;
+    *_observer_meshcoretel-*)  cp "$f" "$DIST/observer_meshcoretel/" ;;
+  esac
+done
+
 echo ""
 if [[ -s "$FAIL_LIST" ]]; then
   echo "FINISHED WITH FAILURES:" >&2
