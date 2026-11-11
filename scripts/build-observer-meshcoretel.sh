@@ -143,9 +143,6 @@ else
   VERSION="$(git rev-parse --short "$TARGET_SHA")"
 fi
 DEST="$OUT_DIR/$VERSION"
-# Fresh artifact set per run: leftover images from earlier builds of the same
-# version would otherwise accumulate and masquerade as current.
-rm -rf "$DEST"
 mkdir -p "$DEST"
 
 # --- build ----------------------------------------------------------------------
@@ -273,6 +270,9 @@ build_one() {
     return 1
   fi
   local BUILD_DIR=".pio/build/$ENV_NAME" ENV_DEST="$DEST/$ENV_NAME" f
+  # Per-env clean: leftover images from earlier builds of this env would
+  # otherwise accumulate and masquerade as current. Other envs are untouched.
+  rm -rf "$ENV_DEST"
   mkdir -p "$ENV_DEST"
   # Platform-specific post-processing (both are upstream custom targets):
   # ESP32 -> merged flashable image; nRF52 -> uf2 (drag-and-drop flashing).
